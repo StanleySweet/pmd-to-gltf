@@ -100,11 +100,10 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
     }
 
     uint32_t skel_bones = skel ? skel->bone_count : model->numBones;
-    uint32_t prop_bones = model->numBones > skel_bones ? model->numBones - skel_bones : 0;
-    uint32_t total_bones = model->numBones;
+    uint32_t total_bones = model->numBones + model->numPropPoints;
 
     // Create bone index mapping: exclude only root (index 0) from skinning
-    // Skinnable bones are bones 1 to numBones-1 (includes props)
+    // Skinnable bones are skeleton bones 1 to numBones-1 (props are not skinnable)
     uint32_t skinnable_bones = model->numBones > 1 ? model->numBones - 1 : model->numBones;
     int *bone_to_joint = calloc(model->numBones, sizeof(int));
     for (uint32_t i = 0; i < model->numBones; i++) {
@@ -121,7 +120,6 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
     size_t indices_size = model->numFaces * 3 * sizeof(uint16_t);
     size_t joints_size = model->numVertices * 4 * sizeof(uint16_t);
     size_t weights_size = model->numVertices * 4 * sizeof(float);
-    size_t ibm_size = skinnable_bones * 16 * sizeof(float);
 
     float *positions = calloc(model->numVertices * 3, sizeof(float));
     float *normals = calloc(model->numVertices * 3, sizeof(float));
@@ -209,8 +207,11 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
 
     // Compute inverse bind matrices from rest pose
     // Vertices are in world space matching rest pose, so use identity matrices
-    float *ibm = calloc(skinnable_bones * 16, sizeof(float));
-    for (uint32_t i = 0; i < skinnable_bones; i++) {
+    // IBMs for skeleton bones + prop points (prop points also get identity since they don't deform)
+    uint32_t total_ibm_count = skinnable_bones + model->numPropPoints;
+    size_t ibm_size = total_ibm_count * 16 * sizeof(float);
+    float *ibm = calloc(total_ibm_count * 16, sizeof(float));
+    for (uint32_t i = 0; i < total_ibm_count; i++) {
         uint32_t idx = i * 16;
         // Identity matrix in column-major order
         ibm[idx + 0] = 1.0f; ibm[idx + 4] = 0.0f; ibm[idx + 8]  = 0.0f; ibm[idx + 12] = 0.0f;
@@ -308,12 +309,10 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
             }
         }
         // Add orphan prop points (parent bone is 0xFF or invalid)
-        for (uint32_t i = 0; i < prop_bones; i++) {
-            if (i < model->numPropPoints) {
-                uint8_t parent_bone = model->propPoints[i].bone;
-                if (parent_bone == 0xFF || parent_bone >= model->numBones) {
-                    fprintf(f, ", %u", skel_bones + i + 2);
-                }
+        for (uint32_t i = 0; i < model->numPropPoints; i++) {
+            uint8_t parent_bone = model->propPoints[i].bone;
+            if (parent_bone == 0xFF || parent_bone >= model->numBones) {
+                fprintf(f, ", %u", model->numBones + i + 2);
             }
         }
     } else {
@@ -328,24 +327,36 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
     fprintf(f, "    {\"mesh\": 0, \"skin\": 0}");
 
     // Bone nodes (start at index 2)
-    for (uint32_t i = 0; i < model->numBones; i++) {
+    for (uint32_t i = 0; i < total_bones; i++) {
         fprintf(f, ",\n    {");
 
-        if (skel && i < skel->bone_count) {
-            fprintf(f, "\"name\": \"%s\"", skel->bones[i].name);
+        if (i < model->numBones) {
+            // Regular skeleton bones
+            if (skel && i < skel->bone_count) {
+                fprintf(f, "\"name\": \"%s\"", skel->bones[i].name);
+            } else {
+                fprintf(f, "\"name\": \"bone_%u\"", i);
+            }
         } else {
-            // Bones beyond skeleton count are unnamed in XML - use generic names
-            fprintf(f, "\"name\": \"bone_%u\"", i);
+            // Prop point bones
+            uint32_t prop_idx = i - model->numBones;
+            fprintf(f, "\"name\": \"prop-%s\"", model->propPoints[prop_idx].name);
         }
 
         // Compute transform (local if has parent, world if root)
-        BoneState transform = model->restStates[i];
-        if (skel && i < skel->bone_count && skel->bones[i].parent_index != -1) {
-            int parent_idx = skel->bones[i].parent_index;
-            compute_local_transform(&transform, &model->restStates[i], &model->restStates[parent_idx]);
-        } else if (i >= skel_bones && i - skel_bones < prop_bones) {
-            // Prop bones are already in world space in restStates, keep them that way
-            // Don't convert to local space for props
+        BoneState transform;
+        if (i < model->numBones) {
+            // Regular skeleton bone
+            transform = model->restStates[i];
+            if (skel && i < skel->bone_count && skel->bones[i].parent_index != -1) {
+                int parent_idx = skel->bones[i].parent_index;
+                compute_local_transform(&transform, &model->restStates[i], &model->restStates[parent_idx]);
+            }
+        } else {
+            // Prop point - use local offset from propPoints
+            uint32_t prop_idx = i - model->numBones;
+            transform.translation = model->propPoints[prop_idx].translation;
+            transform.rotation = model->propPoints[prop_idx].rotation;
         }
 
         fprintf(f, ", \"translation\": [%f, %f, %f], \"rotation\": [%f, %f, %f, %f]",
@@ -358,18 +369,33 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
                 transform.rotation.w);
 
         // Add children
-        if (skel) {
+        if (i < model->numBones) {
             int has_children = 0;
             // Skeleton children
-            for (int j = 0; j < skel->bone_count; j++) {
-                if (skel->bones[j].parent_index == (int)i) {
+            if (skel) {
+                for (int j = 0; j < skel->bone_count; j++) {
+                    if (skel->bones[j].parent_index == (int)i) {
+                        if (!has_children) {
+                            fprintf(f, ", \"children\": [");
+                            has_children = 1;
+                        } else {
+                            fprintf(f, ", ");
+                        }
+                        fprintf(f, "%u", j + 2);
+                    }
+                }
+            }
+            // Prop point children
+            for (uint32_t j = 0; j < model->numPropPoints; j++) {
+                uint8_t parent_bone = model->propPoints[j].bone;
+                if (parent_bone == i) {
                     if (!has_children) {
                         fprintf(f, ", \"children\": [");
                         has_children = 1;
                     } else {
                         fprintf(f, ", ");
                     }
-                    fprintf(f, "%u", j + 2);
+                    fprintf(f, "%u", model->numBones + j + 2);
                 }
             }
             if (has_children) fprintf(f, "]");
@@ -388,7 +414,7 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
     fprintf(f, "    {\"bufferView\": 3, \"componentType\": 5123, \"count\": %u, \"type\": \"VEC4\"},\n", model->numVertices);
     fprintf(f, "    {\"bufferView\": 4, \"componentType\": 5126, \"count\": %u, \"type\": \"VEC4\"},\n", model->numVertices);
     fprintf(f, "    {\"bufferView\": 5, \"componentType\": 5123, \"count\": %u, \"type\": \"SCALAR\"},\n", model->numFaces * 3);
-    fprintf(f, "    {\"bufferView\": 6, \"componentType\": 5126, \"count\": %u, \"type\": \"MAT4\"}",  skinnable_bones);
+    fprintf(f, "    {\"bufferView\": 6, \"componentType\": 5126, \"count\": %u, \"type\": \"MAT4\"}",  skinnable_bones + model->numPropPoints);
 
     // Animation accessors
     if (anim && anim->numFrames > 0) {
@@ -463,10 +489,16 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
     fprintf(f, "\n  ],\n");
 
     fprintf(f, "  \"skins\": [{\"skeleton\": 0, \"inverseBindMatrices\": 6, \"joints\": [");
-    // Include all bones except root (bones 1 through numBones-1, including props)
+    // Include skeleton bones (except root) + all prop points
+    // Skeleton bones: 1 through numBones-1
     for (uint32_t i = 0; i < skinnable_bones; i++) {
         // Node index = bone index + 2, but we're skipping root (bone 0), so it's (i+1)+2 = i+3
-        fprintf(f, "%u%s", i + 3, (i < skinnable_bones - 1) ? ", " : "");
+        fprintf(f, "%u, ", i + 3);
+    }
+    // Prop point bones: numBones through numBones+numPropPoints-1
+    for (uint32_t i = 0; i < model->numPropPoints; i++) {
+        uint32_t node_index = model->numBones + i + 2;
+        fprintf(f, "%u%s", node_index, (i < model->numPropPoints - 1) ? ", " : "");
     }
     fprintf(f, "]}]");
 
