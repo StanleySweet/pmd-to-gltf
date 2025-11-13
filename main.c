@@ -69,22 +69,29 @@ static char* extract_anim_name(const char *psa_file, const char *basename) {
 }
 
 int main(int argc, char *argv[]) {
+
     if (argc < 2) {
-        printf("Usage: %s <base_name> [output.gltf] [skeleton_id]\n", argv[0]);
+        printf("Usage: %s <base_name> [output.gltf] [skeleton_id] [--print-bones]\n", argv[0]);
         printf("  Loads: <base_name>.pmd, <base_name>.xml, <base_name>_*.psa\n");
         printf("  Example: %s horse output.gltf Horse\n", argv[0]);
+        printf("  Option: --print-bones to print all bone transforms and exit.\n");
         return 1;
     }
 
     const char *base_name = argv[1];
     const char *output_file = (argc >= 3) ? argv[2] : "output.gltf";
-    const char *skeleton_id = (argc >= 4) ? argv[3] : "Horse";
+    const char *skeleton_id = (argc >= 4) ? argv[3] : "Armature";
+    int print_bones = 0;
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--print-bones") == 0) print_bones = 1;
+    }
 
     // Build filenames from base name
     char pmd_file[512];
     char skeleton_file[512];
     snprintf(pmd_file, sizeof(pmd_file), "%s.pmd", base_name);
     snprintf(skeleton_file, sizeof(skeleton_file), "%s.xml", base_name);
+
 
     printf("Loading PMD: %s\n", pmd_file);
     PMDModel *model = load_pmd(pmd_file);
@@ -98,6 +105,23 @@ int main(int argc, char *argv[]) {
 
     if (model->numPropPoints > 0) {
         printf("  Prop points: %u\n", model->numPropPoints);
+    }
+
+    if (print_bones) {
+        printf("All bone transforms (rest pose):\n");
+        for (uint32_t i = 0; i < model->numBones; i++) {
+            printf("Bone %2u: T(% .2f,% .2f,% .2f) R(% .2f,% .2f,% .2f,% .2f)\n",
+                   i,
+                   model->restStates[i].translation.x,
+                   model->restStates[i].translation.y,
+                   model->restStates[i].translation.z,
+                   model->restStates[i].rotation.x,
+                   model->restStates[i].rotation.y,
+                   model->restStates[i].rotation.z,
+                   model->restStates[i].rotation.w);
+        }
+        free_pmd(model);
+        return 0;
     }
 
     // Load skeleton hierarchy

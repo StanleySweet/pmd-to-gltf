@@ -155,8 +155,9 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
         normals[i*3+1] = model->vertices[i].normal.y;
         normals[i*3+2] = model->vertices[i].normal.z;
 
+        // glTF expects V origin at top; source data appears upside-down -> flip V
         texcoords[i*2+0] = model->vertices[i].coords[0].u;
-        texcoords[i*2+1] = model->vertices[i].coords[0].v;
+        texcoords[i*2+1] = 1.0f - model->vertices[i].coords[0].v;
 
         float total_weight = 0.0f;
         int valid_count = 0;
