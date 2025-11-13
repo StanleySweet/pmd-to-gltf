@@ -92,7 +92,9 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
         world->translation.z - parent_world->translation.z
     };
     local->translation = quat_rotate(parent_inv, diff);
-}void export_gltf(const char *output_file, PMDModel *model, PSAAnimation *anim, SkeletonDef *skel, const char *mesh_name) {
+}
+
+void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name) {
     FILE *f = fopen(output_file, "w");
     if (!f) {
         fprintf(stderr, "Failed to create output file\n");
@@ -220,64 +222,75 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
         ibm[idx + 3] = 0.0f; ibm[idx + 7] = 0.0f; ibm[idx + 11] = 0.0f; ibm[idx + 15] = 1.0f;
     }
 
-    // Prepare animation data if available
-    float *anim_times = NULL;
-    float **anim_translations = NULL;
-    float **anim_rotations = NULL;
-    char **anim_trans_uris = NULL;
-    char **anim_rot_uris = NULL;
-    char *anim_times_uri = NULL;
-    uint32_t anim_bones = 0;
-    size_t times_size = 0;
-    size_t trans_size = 0;
-    size_t rot_size = 0;
+    // Prepare animation data for ALL animations
+    typedef struct {
+        float *times;
+        float **translations;  // [bone][frame*3]
+        float **rotations;     // [bone][frame*4]
+        char *times_uri;
+        char **trans_uris;
+        char **rot_uris;
+        uint32_t num_bones;
+        size_t times_size;
+        size_t trans_size;
+        size_t rot_size;
+    } AnimData;
 
-    if (anim && anim->numFrames > 0) {
-        anim_bones = anim->numBones < model->numBones ? anim->numBones : model->numBones;
+    AnimData *anim_data = NULL;
+    if (anim_count > 0) {
+        anim_data = calloc(anim_count, sizeof(AnimData));
 
-        // Time samples (30 fps)
-        anim_times = calloc(anim->numFrames, sizeof(float));
-        for (uint32_t i = 0; i < anim->numFrames; i++) {
-            anim_times[i] = (float)i / 30.0f;
-        }
-        times_size = anim->numFrames * sizeof(float);
-        anim_times_uri = create_data_uri(anim_times, times_size);
+        for (uint32_t a = 0; a < anim_count; a++) {
+            PSAAnimation *anim = anims[a];
+            if (!anim || anim->numFrames == 0) continue;
 
-        // Per-bone translation and rotation arrays
-        anim_translations = calloc(anim_bones, sizeof(float*));
-        anim_rotations = calloc(anim_bones, sizeof(float*));
-        anim_trans_uris = calloc(anim_bones, sizeof(char*));
-        anim_rot_uris = calloc(anim_bones, sizeof(char*));
-        trans_size = anim->numFrames * 3 * sizeof(float);
-        rot_size = anim->numFrames * 4 * sizeof(float);
+            uint32_t anim_bones = anim->numBones < model->numBones ? anim->numBones : model->numBones;
+            anim_data[a].num_bones = anim_bones;
 
-        for (uint32_t b = 0; b < anim_bones; b++) {
-            anim_translations[b] = calloc(anim->numFrames * 3, sizeof(float));
-            anim_rotations[b] = calloc(anim->numFrames * 4, sizeof(float));
+            // Time samples (30 fps)
+            anim_data[a].times = calloc(anim->numFrames, sizeof(float));
+            for (uint32_t i = 0; i < anim->numFrames; i++) {
+                anim_data[a].times[i] = (float)i / 30.0f;
+            }
+            anim_data[a].times_size = anim->numFrames * sizeof(float);
+            anim_data[a].times_uri = create_data_uri(anim_data[a].times, anim_data[a].times_size);
 
-            for (uint32_t f = 0; f < anim->numFrames; f++) {
-                BoneState *state = &anim->boneStates[f * anim->numBones + b];
+            // Per-bone translation and rotation arrays
+            anim_data[a].translations = calloc(anim_bones, sizeof(float*));
+            anim_data[a].rotations = calloc(anim_bones, sizeof(float*));
+            anim_data[a].trans_uris = calloc(anim_bones, sizeof(char*));
+            anim_data[a].rot_uris = calloc(anim_bones, sizeof(char*));
+            anim_data[a].trans_size = anim->numFrames * 3 * sizeof(float);
+            anim_data[a].rot_size = anim->numFrames * 4 * sizeof(float);
 
-                // Convert world space to local space if bone has parent
-                BoneState local_state = *state;
-                if (skel && b < skel->bone_count && skel->bones[b].parent_index != -1) {
-                    int parent_idx = skel->bones[b].parent_index;
-                    BoneState *parent_state = &anim->boneStates[f * anim->numBones + parent_idx];
-                    compute_local_transform(&local_state, state, parent_state);
+            for (uint32_t b = 0; b < anim_bones; b++) {
+                anim_data[a].translations[b] = calloc(anim->numFrames * 3, sizeof(float));
+                anim_data[a].rotations[b] = calloc(anim->numFrames * 4, sizeof(float));
+
+                for (uint32_t f = 0; f < anim->numFrames; f++) {
+                    BoneState *state = &anim->boneStates[f * anim->numBones + b];
+
+                    // Convert world space to local space if bone has parent
+                    BoneState local_state = *state;
+                    if (skel && b < skel->bone_count && skel->bones[b].parent_index != -1) {
+                        int parent_idx = skel->bones[b].parent_index;
+                        BoneState *parent_state = &anim->boneStates[f * anim->numBones + parent_idx];
+                        compute_local_transform(&local_state, state, parent_state);
+                    }
+
+                    anim_data[a].translations[b][f*3 + 0] = local_state.translation.x;
+                    anim_data[a].translations[b][f*3 + 1] = local_state.translation.y;
+                    anim_data[a].translations[b][f*3 + 2] = local_state.translation.z;
+
+                    anim_data[a].rotations[b][f*4 + 0] = local_state.rotation.x;
+                    anim_data[a].rotations[b][f*4 + 1] = local_state.rotation.y;
+                    anim_data[a].rotations[b][f*4 + 2] = local_state.rotation.z;
+                    anim_data[a].rotations[b][f*4 + 3] = local_state.rotation.w;
                 }
 
-                anim_translations[b][f*3 + 0] = local_state.translation.x;
-                anim_translations[b][f*3 + 1] = local_state.translation.y;
-                anim_translations[b][f*3 + 2] = local_state.translation.z;
-
-                anim_rotations[b][f*4 + 0] = local_state.rotation.x;
-                anim_rotations[b][f*4 + 1] = local_state.rotation.y;
-                anim_rotations[b][f*4 + 2] = local_state.rotation.z;
-                anim_rotations[b][f*4 + 3] = local_state.rotation.w;
+                anim_data[a].trans_uris[b] = create_data_uri(anim_data[a].translations[b], anim_data[a].trans_size);
+                anim_data[a].rot_uris[b] = create_data_uri(anim_data[a].rotations[b], anim_data[a].rot_size);
             }
-
-            anim_trans_uris[b] = create_data_uri(anim_translations[b], trans_size);
-            anim_rot_uris[b] = create_data_uri(anim_rotations[b], rot_size);
         }
     }
 
@@ -416,21 +429,29 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
     fprintf(f, "    {\"bufferView\": 5, \"componentType\": 5123, \"count\": %u, \"type\": \"SCALAR\"},\n", model->numFaces * 3);
     fprintf(f, "    {\"bufferView\": 6, \"componentType\": 5126, \"count\": %u, \"type\": \"MAT4\"}",  skinnable_bones + model->numPropPoints);
 
-    // Animation accessors
-    if (anim && anim->numFrames > 0) {
-        fprintf(f, ",\n");
-        // Accessor 7: Time samples (shared by all bones)
-        fprintf(f, "    {\"bufferView\": 7, \"componentType\": 5126, \"count\": %u, \"type\": \"SCALAR\", \"min\": [0.0], \"max\": [%f]}",
-                anim->numFrames, (float)(anim->numFrames - 1) / 30.0f);
+    // Animation accessors for ALL animations
+    if (anim_data) {
+        uint32_t accessor_idx = 7;
+        for (uint32_t a = 0; a < anim_count; a++) {
+            if (!anims[a] || anims[a]->numFrames == 0) continue;
 
-        // Accessors 8+: Per-bone translations and rotations
-        for (uint32_t b = 0; b < anim_bones; b++) {
             fprintf(f, ",\n");
-            fprintf(f, "    {\"bufferView\": %u, \"componentType\": 5126, \"count\": %u, \"type\": \"VEC3\"}",
-                    8 + b * 2, anim->numFrames);
-            fprintf(f, ",\n");
-            fprintf(f, "    {\"bufferView\": %u, \"componentType\": 5126, \"count\": %u, \"type\": \"VEC4\"}",
-                    8 + b * 2 + 1, anim->numFrames);
+            // Time accessor for this animation
+            fprintf(f, "    {\"bufferView\": %u, \"componentType\": 5126, \"count\": %u, \"type\": \"SCALAR\", \"min\": [0.0], \"max\": [%f]}",
+                    accessor_idx, anims[a]->numFrames, (float)(anims[a]->numFrames - 1) / 30.0f);
+            accessor_idx++;
+
+            // Per-bone translations and rotations for this animation
+            for (uint32_t b = 0; b < anim_data[a].num_bones; b++) {
+                fprintf(f, ",\n");
+                fprintf(f, "    {\"bufferView\": %u, \"componentType\": 5126, \"count\": %u, \"type\": \"VEC3\"}",
+                        accessor_idx, anims[a]->numFrames);
+                accessor_idx++;
+                fprintf(f, ",\n");
+                fprintf(f, "    {\"bufferView\": %u, \"componentType\": 5126, \"count\": %u, \"type\": \"VEC4\"}",
+                        accessor_idx, anims[a]->numFrames);
+                accessor_idx++;
+            }
         }
     }
 
@@ -445,18 +466,26 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
     fprintf(f, "    {\"buffer\": 5, \"byteLength\": %zu},\n", indices_size);
     fprintf(f, "    {\"buffer\": 6, \"byteLength\": %zu}", ibm_size);
 
-    // Animation buffer views
-    if (anim && anim->numFrames > 0) {
-        fprintf(f, ",\n");
-        // Buffer view 7: Time samples
-        fprintf(f, "    {\"buffer\": 7, \"byteLength\": %zu}", times_size);
+    // Animation buffer views for ALL animations
+    if (anim_data) {
+        uint32_t view_idx = 7;
+        for (uint32_t a = 0; a < anim_count; a++) {
+            if (!anims[a] || anims[a]->numFrames == 0) continue;
 
-        // Buffer views 8+: Per-bone translations and rotations
-        for (uint32_t b = 0; b < anim_bones; b++) {
             fprintf(f, ",\n");
-            fprintf(f, "    {\"buffer\": %u, \"byteLength\": %zu}", 8 + b * 2, trans_size);
-            fprintf(f, ",\n");
-            fprintf(f, "    {\"buffer\": %u, \"byteLength\": %zu}", 8 + b * 2 + 1, rot_size);
+            // Buffer view for time samples
+            fprintf(f, "    {\"buffer\": %u, \"byteLength\": %zu}", view_idx, anim_data[a].times_size);
+            view_idx++;
+
+            // Buffer views for per-bone translations and rotations
+            for (uint32_t b = 0; b < anim_data[a].num_bones; b++) {
+                fprintf(f, ",\n");
+                fprintf(f, "    {\"buffer\": %u, \"byteLength\": %zu}", view_idx, anim_data[a].trans_size);
+                view_idx++;
+                fprintf(f, ",\n");
+                fprintf(f, "    {\"buffer\": %u, \"byteLength\": %zu}", view_idx, anim_data[a].rot_size);
+                view_idx++;
+            }
         }
     }
 
@@ -471,18 +500,26 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
     fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"},\n", indices_size, idx_uri);
     fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"}", ibm_size, ibm_uri);
 
-    // Animation buffers
-    if (anim && anim->numFrames > 0) {
-        fprintf(f, ",\n");
-        // Buffer 7: Time samples
-        fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"}", times_size, anim_times_uri);
+    // Animation buffers for ALL animations
+    if (anim_data) {
+        uint32_t buf_idx = 7;
+        for (uint32_t a = 0; a < anim_count; a++) {
+            if (!anims[a] || anims[a]->numFrames == 0) continue;
 
-        // Buffers 8+: Per-bone translations and rotations
-        for (uint32_t b = 0; b < anim_bones; b++) {
             fprintf(f, ",\n");
-            fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"}", trans_size, anim_trans_uris[b]);
-            fprintf(f, ",\n");
-            fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"}", rot_size, anim_rot_uris[b]);
+            // Buffer for time samples
+            fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"}", anim_data[a].times_size, anim_data[a].times_uri);
+            buf_idx++;
+
+            // Buffers for per-bone translations and rotations
+            for (uint32_t b = 0; b < anim_data[a].num_bones; b++) {
+                fprintf(f, ",\n");
+                fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"}", anim_data[a].trans_size, anim_data[a].trans_uris[b]);
+                buf_idx++;
+                fprintf(f, ",\n");
+                fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"}", anim_data[a].rot_size, anim_data[a].rot_uris[b]);
+                buf_idx++;
+            }
         }
     }
 
@@ -502,55 +539,73 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
     }
     fprintf(f, "]}]");
 
-    // Add animation if available
-    if (anim && anim->numFrames > 0) {
+    // Add ALL animations
+    if (anim_data && anim_count > 0) {
         fprintf(f, ",\n");
-        fprintf(f, "  \"animations\": [{\n");
-        fprintf(f, "    \"name\": \"Animation\",\n");
-        fprintf(f, "    \"samplers\": [\n");
+        fprintf(f, "  \"animations\": [");
 
-        // Create samplers: one for translation, one for rotation per bone
-        for (uint32_t b = 0; b < anim_bones; b++) {
-            uint32_t time_accessor = 7; // Shared time accessor
-            uint32_t trans_accessor = 8 + b * 2;
-            uint32_t rot_accessor = 8 + b * 2 + 1;
+        uint32_t accessor_base = 7;  // First animation accessor starts at 7
+        int first_anim = 1;
 
-            // Translation sampler
-            fprintf(f, "      {\"input\": %u, \"output\": %u, \"interpolation\": \"LINEAR\"}",
-                    time_accessor, trans_accessor);
+        for (uint32_t a = 0; a < anim_count; a++) {
+            if (!anims[a] || anims[a]->numFrames == 0) continue;
 
-            // Rotation sampler
-            fprintf(f, ",\n      {\"input\": %u, \"output\": %u, \"interpolation\": \"LINEAR\"}",
-                    time_accessor, rot_accessor);
+            if (!first_anim) fprintf(f, ",");
+            first_anim = 0;
 
-            if (b < anim_bones - 1) fprintf(f, ",\n");
+            fprintf(f, "{\n");
+            fprintf(f, "    \"name\": \"%s\",\n", anims[a]->name ? anims[a]->name : "Animation");
+            fprintf(f, "    \"samplers\": [\n");
+
+            uint32_t time_accessor = accessor_base;
+            accessor_base++;  // Move past time accessor
+
+            // Create samplers: one for translation, one for rotation per bone
+            for (uint32_t b = 0; b < anim_data[a].num_bones; b++) {
+                uint32_t trans_accessor = accessor_base;
+                accessor_base++;
+                uint32_t rot_accessor = accessor_base;
+                accessor_base++;
+
+                // Translation sampler
+                fprintf(f, "      {\"input\": %u, \"output\": %u, \"interpolation\": \"LINEAR\"}",
+                        time_accessor, trans_accessor);
+
+                // Rotation sampler
+                fprintf(f, ",\n      {\"input\": %u, \"output\": %u, \"interpolation\": \"LINEAR\"}",
+                        time_accessor, rot_accessor);
+
+                if (b < anim_data[a].num_bones - 1) fprintf(f, ",\n");
+            }
+
+            fprintf(f, "\n    ],\n");
+            fprintf(f, "    \"channels\": [\n");
+
+            // Create channels connecting samplers to bone nodes
+            for (uint32_t b = 0; b < anim_data[a].num_bones; b++) {
+                uint32_t trans_sampler = b * 2;
+                uint32_t rot_sampler = b * 2 + 1;
+                uint32_t node = b + 2; // Bone nodes start at index 2
+
+                // Translation channel
+                fprintf(f, "      {\"sampler\": %u, \"target\": {\"node\": %u, \"path\": \"translation\"}}",
+                        trans_sampler, node);
+
+                // Rotation channel
+                fprintf(f, ",\n      {\"sampler\": %u, \"target\": {\"node\": %u, \"path\": \"rotation\"}}",
+                        rot_sampler, node);
+
+                if (b < anim_data[a].num_bones - 1) fprintf(f, ",\n");
+            }
+
+            fprintf(f, "\n    ]\n");
+            fprintf(f, "  }");
         }
 
-        fprintf(f, "\n    ],\n");
-        fprintf(f, "    \"channels\": [\n");
-
-        // Create channels connecting samplers to bone nodes
-        for (uint32_t b = 0; b < anim_bones; b++) {
-            uint32_t trans_sampler = b * 2;
-            uint32_t rot_sampler = b * 2 + 1;
-            uint32_t node = b + 2; // Bone nodes start at index 2
-
-            // Translation channel
-            fprintf(f, "      {\"sampler\": %u, \"target\": {\"node\": %u, \"path\": \"translation\"}}",
-                    trans_sampler, node);
-
-            // Rotation channel
-            fprintf(f, ",\n      {\"sampler\": %u, \"target\": {\"node\": %u, \"path\": \"rotation\"}}",
-                    rot_sampler, node);
-
-            if (b < anim_bones - 1) fprintf(f, ",\n");
-        }
-
-        fprintf(f, "\n    ]\n");
-        fprintf(f, "  }]");
+        fprintf(f, "]\n");
     }
 
-    fprintf(f, "\n}\n");
+    fprintf(f, "}\n");
 
     fclose(f);
 
@@ -570,19 +625,26 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
     free(weights_uri);
     free(ibm_uri);
 
-    // Free animation data
-    if (anim && anim->numFrames > 0) {
-        free(anim_times);
-        free(anim_times_uri);
-        for (uint32_t b = 0; b < anim_bones; b++) {
-            free(anim_translations[b]);
-            free(anim_rotations[b]);
-            free(anim_trans_uris[b]);
-            free(anim_rot_uris[b]);
+    // Free animation data for ALL animations
+    if (anim_data) {
+        for (uint32_t a = 0; a < anim_count; a++) {
+            if (!anims[a] || anims[a]->numFrames == 0) continue;
+
+            free(anim_data[a].times);
+            free(anim_data[a].times_uri);
+
+            for (uint32_t b = 0; b < anim_data[a].num_bones; b++) {
+                free(anim_data[a].translations[b]);
+                free(anim_data[a].rotations[b]);
+                free(anim_data[a].trans_uris[b]);
+                free(anim_data[a].rot_uris[b]);
+            }
+
+            free(anim_data[a].translations);
+            free(anim_data[a].rotations);
+            free(anim_data[a].trans_uris);
+            free(anim_data[a].rot_uris);
         }
-        free(anim_translations);
-        free(anim_rotations);
-        free(anim_trans_uris);
-        free(anim_rot_uris);
+        free(anim_data);
     }
 }

@@ -4,12 +4,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 // Function declarations from other modules
 PMDModel* load_pmd(const char *filename);
 void free_pmd(PMDModel *model);
 PSAAnimation* load_psa(const char *filename);
 void free_psa(PSAAnimation *anim);
-void export_gltf(const char *output_file, PMDModel *model, PSAAnimation *anim, SkeletonDef *skel, const char *mesh_name);
+void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name);
 
 // Auto-detect skeleton XML file based on PMD filename
 static char* find_skeleton_file(const char *pmd_file) {
@@ -33,22 +37,30 @@ static char* find_skeleton_file(const char *pmd_file) {
 }
 
 // Extract animation name from PSA filename
-// Pattern: model_animname.psa -> "animname"
-static char* extract_anim_name(const char *psa_file) {
+// Pattern: basename_animname.psa -> "animname"
+// For horse_idle_a.psa with basename "horse" -> "idle_a"
+static char* extract_anim_name(const char *psa_file, const char *basename) {
     // Find last path separator
     const char *filename = strrchr(psa_file, '/');
     if (!filename) filename = strrchr(psa_file, '\\');
     filename = filename ? filename + 1 : psa_file;
 
-    // Find last underscore before extension
+    // Find the extension
     const char *ext = strrchr(filename, '.');
-    const char *underscore = strrchr(filename, '_');
+    if (!ext) return NULL;
 
-    if (underscore && ext && underscore < ext) {
-        // Extract between underscore and extension
-        size_t len = ext - underscore - 1;
+    // Build the prefix to skip: "basename_"
+    char prefix[256];
+    snprintf(prefix, sizeof(prefix), "%s_", basename);
+    size_t prefix_len = strlen(prefix);
+
+    // Check if filename starts with prefix
+    if (strncmp(filename, prefix, prefix_len) == 0) {
+        // Extract everything between prefix and extension
+        const char *start = filename + prefix_len;
+        size_t len = ext - start;
         char *name = malloc(len + 1);
-        memcpy(name, underscore + 1, len);
+        memcpy(name, start, len);
         name[len] = '\0';
         return name;
     }
@@ -57,17 +69,22 @@ static char* extract_anim_name(const char *psa_file) {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 3) {
-        printf("Usage: %s <model.pmd> <animation.psa> [output.gltf] [skeleton.xml] [skeleton_id]\n", argv[0]);
-        printf("  If skeleton.xml is not specified, will auto-detect <model>.xml\n");
+    if (argc < 2) {
+        printf("Usage: %s <base_name> [output.gltf] [skeleton_id]\n", argv[0]);
+        printf("  Loads: <base_name>.pmd, <base_name>.xml, <base_name>_*.psa\n");
+        printf("  Example: %s horse output.gltf Horse\n", argv[0]);
         return 1;
     }
 
-    const char *pmd_file = argv[1];
-    const char *psa_file = argv[2];
-    const char *output_file = (argc >= 4) ? argv[3] : "output.gltf";
-    const char *skeleton_file = (argc >= 5) ? argv[4] : NULL;
-    const char *skeleton_id = (argc >= 6) ? argv[5] : "Horse";
+    const char *base_name = argv[1];
+    const char *output_file = (argc >= 3) ? argv[2] : "output.gltf";
+    const char *skeleton_id = (argc >= 4) ? argv[3] : "Horse";
+
+    // Build filenames from base name
+    char pmd_file[512];
+    char skeleton_file[512];
+    snprintf(pmd_file, sizeof(pmd_file), "%s.pmd", base_name);
+    snprintf(skeleton_file, sizeof(skeleton_file), "%s.xml", base_name);
 
     printf("Loading PMD: %s\n", pmd_file);
     PMDModel *model = load_pmd(pmd_file);
@@ -83,73 +100,119 @@ int main(int argc, char *argv[]) {
         printf("  Prop points: %u\n", model->numPropPoints);
     }
 
-    printf("Loading PSA: %s\n", psa_file);
-    PSAAnimation *anim = load_psa(psa_file);
-    if (!anim) {
-        fprintf(stderr, "Failed to load PSA file\n");
-        free_pmd(model);
-        return 1;
-    }
-
-    // Override animation name from filename if possible
-    char *anim_name_from_file = extract_anim_name(psa_file);
-    if (anim_name_from_file) {
-        free(anim->name);
-        anim->name = anim_name_from_file;
-    }
-
-    printf("  Animation: %s, Frames: %u, Bones: %u\n",
-           anim->name, anim->numFrames, anim->numBones);
-
-    if (model->numBones != anim->numBones) {
-        fprintf(stderr, "Warning: Bone count mismatch (PMD: %u, PSA: %u)\n",
-                model->numBones, anim->numBones);
-    }
-
     // Load skeleton hierarchy
-    SkeletonDef *skel = NULL;
-    char *auto_skel_file = NULL;
-
-    if (!skeleton_file) {
-        auto_skel_file = find_skeleton_file(pmd_file);
-        skeleton_file = auto_skel_file;
+    printf("Loading skeleton: %s (id: %s)\n", skeleton_file, skeleton_id);
+    SkeletonDef *skel = load_skeleton_xml(skeleton_file, skeleton_id);
+    if (skel) {
+        printf("  Loaded %d bones\n", skel->bone_count);
+        if (model->numBones > (uint32_t)skel->bone_count) {
+            printf("  Note: %u extra bones\n", model->numBones - skel->bone_count);
+        }
     }
 
-    if (skeleton_file) {
-        printf("Loading skeleton: %s (id: %s)\n", skeleton_file, skeleton_id);
-        skel = load_skeleton_xml(skeleton_file, skeleton_id);
-        if (skel) {
-            printf("  Loaded %d bones\n", skel->bone_count);
+    // Find and load all matching PSA files
+    printf("Loading animations: %s_*.psa\n", base_name);
+    PSAAnimation **anims = NULL;
+    uint32_t anim_count = 0;
+    uint32_t anim_capacity = 10;
+    anims = calloc(anim_capacity, sizeof(PSAAnimation*));
 
-            // Extra bones beyond skeleton are likely prop points
-            if (model->numBones > (uint32_t)skel->bone_count) {
-                printf("  Note: %u extra bones (likely prop points)\n",
-                       model->numBones - skel->bone_count);
-            }
+    char psa_pattern[512];
+    snprintf(psa_pattern, sizeof(psa_pattern), "%s_", base_name);
+    size_t pattern_len = strlen(psa_pattern);
+
+    // Get directory from base_name
+    const char *dir_end = strrchr(base_name, '/');
+    if (!dir_end) dir_end = strrchr(base_name, '\\');
+    char dir[512] = ".";
+    if (dir_end) {
+        size_t dir_len = dir_end - base_name;
+        if (dir_len < sizeof(dir) - 1) {
+            memcpy(dir, base_name, dir_len);
+            dir[dir_len] = '\0';
         }
+    }
+
+    // Load all matching PSA files (Windows-specific directory reading)
+    #ifdef _WIN32
+    WIN32_FIND_DATAA find_data;
+    char search_pattern[512];
+    snprintf(search_pattern, sizeof(search_pattern), "%s_*.psa", base_name);
+    HANDLE hFind = FindFirstFileA(search_pattern, &find_data);
+
+    if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+            char psa_file[512];
+            const char *dir_part = dir_end ? "" : "";
+            if (dir_end) {
+                snprintf(psa_file, sizeof(psa_file), "%s/%s", dir, find_data.cFileName);
+            } else {
+                snprintf(psa_file, sizeof(psa_file), "%s", find_data.cFileName);
+            }
+
+            PSAAnimation *anim = load_psa(psa_file);
+            if (anim) {
+                // Extract just the base filename for animation naming
+                const char *base_filename = strrchr(base_name, '/');
+                if (!base_filename) base_filename = strrchr(base_name, '\\');
+                base_filename = base_filename ? base_filename + 1 : base_name;
+
+                char *anim_name = extract_anim_name(psa_file, base_filename);
+                if (anim_name) {
+                    free(anim->name);
+                    anim->name = anim_name;
+                }
+
+                if (anim_count >= anim_capacity) {
+                    anim_capacity *= 2;
+                    anims = realloc(anims, anim_capacity * sizeof(PSAAnimation*));
+                }
+                anims[anim_count++] = anim;
+                printf("  Loaded: %s (%u frames)\n", anim->name, anim->numFrames);
+            }
+        } while (FindNextFileA(hFind, &find_data));
+        FindClose(hFind);
+    }
+    #else
+    // Fallback: try common animation names
+    const char *anim_names[] = {"idle", "walk", "run", "attack", "death"};
+    for (int i = 0; i < 5; i++) {
+        char psa_file[512];
+        snprintf(psa_file, sizeof(psa_file), "%s_%s.psa", base_name, anim_names[i]);
+        PSAAnimation *anim = load_psa(psa_file);
+        if (anim) {
+            free(anim->name);
+            anim->name = strdup(anim_names[i]);
+            if (anim_count >= anim_capacity) {
+                anim_capacity *= 2;
+                anims = realloc(anims, anim_capacity * sizeof(PSAAnimation*));
+            }
+            anims[anim_count++] = anim;
+            printf("  Loaded: %s (%u frames)\n", anim->name, anim->numFrames);
+        }
+    }
+    #endif
+
+    if (anim_count == 0) {
+        fprintf(stderr, "Warning: No animations found\n");
     }
 
     printf("Exporting to glTF: %s\n", output_file);
 
-    // Extract mesh name from PMD filename
-    const char *mesh_name = strrchr(pmd_file, '/');
-    if (!mesh_name) mesh_name = strrchr(pmd_file, '\\');
-    mesh_name = mesh_name ? mesh_name + 1 : pmd_file;
+    // Extract mesh name from base_name
+    const char *mesh_name = strrchr(base_name, '/');
+    if (!mesh_name) mesh_name = strrchr(base_name, '\\');
+    mesh_name = mesh_name ? mesh_name + 1 : base_name;
 
-    // Remove extension
-    char mesh_name_buf[256];
-    strncpy(mesh_name_buf, mesh_name, sizeof(mesh_name_buf) - 1);
-    mesh_name_buf[sizeof(mesh_name_buf) - 1] = '\0';
-    char *ext = strrchr(mesh_name_buf, '.');
-    if (ext) *ext = '\0';
+    export_gltf(output_file, model, anims, anim_count, skel, mesh_name);
 
-    export_gltf(output_file, model, anim, skel, mesh_name_buf);
+    printf("Done! Exported %u animation(s)\n", anim_count);
 
-    printf("Done!\n");
-
-    if (auto_skel_file) free(auto_skel_file);
     if (skel) free_skeleton(skel);
-    free_psa(anim);
+    for (uint32_t i = 0; i < anim_count; i++) {
+        free_psa(anims[i]);
+    }
+    free(anims);
     free_pmd(model);
     return 0;
 }
