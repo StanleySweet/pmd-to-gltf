@@ -17,6 +17,7 @@ jobs:
     strategy:
       matrix:
         compiler: [gcc, clang]
+        build_type: [Release, Debug]
     
     steps:
       - name: Checkout code
@@ -25,106 +26,122 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential
+          sudo apt-get install -y build-essential cmake
       
-      - name: Build with ${{ matrix.compiler }}
+      - name: Configure and Build
+        env:
+          CC: ${{ matrix.compiler }}
         run: |
-          ${{ matrix.compiler }} -o converter main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm -Wall -Wextra
+          cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake --build build
       
-      - name: Test converter
+      - name: Run Tests
         run: |
-          ./converter input/horse output/test_linux_${{ matrix.compiler }}.gltf Horse
-          ls -lh output/test_linux_${{ matrix.compiler }}.gltf
+          cd build
+          ctest --output-on-failure
+          
+      - name: Test Converter
+        run: |
+          ./build/converter input/horse output/test_linux_${{ matrix.compiler }}_${{ matrix.build_type }}.gltf Horse
+          ls -lh output/test_linux_${{ matrix.compiler }}_${{ matrix.build_type }}.gltf
       
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: converter-linux-${{ matrix.compiler }}
-          path: converter
+          name: converter-linux-${{ matrix.compiler }}-${{ matrix.build_type }}
+          path: build/converter
 
   build-macos:
     name: Build on macOS
     runs-on: macos-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Build with clang
-        run: |
-          clang -o converter main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm -Wall -Wextra
-      
-      - name: Test converter
-        run: |
-          ./converter input/horse output/test_macos.gltf Horse
-          ls -lh output/test_macos.gltf
-      
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: converter-macos
-          path: converter
-
-  build-mingw:
-    name: Build with MinGW-w64
-    runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch: [x86_64, i686]
+        build_type: [Release, Debug]
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Install MinGW-w64
+      - name: Configure and Build
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake --build build
+      
+      - name: Run Tests
+        run: |
+          cd build
+          ctest --output-on-failure
+          
+      - name: Test Converter
+        run: |
+          ./build/converter input/horse output/test_macos_${{ matrix.build_type }}.gltf Horse
+          ls -lh output/test_macos_${{ matrix.build_type }}.gltf
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: converter-macos-${{ matrix.build_type }}
+          path: build/converter
+
+  build-windows:
+    name: Build on Windows
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        build_type: [Release, Debug]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure and Build
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake --build build --config ${{ matrix.build_type }}
+      
+      - name: Run Tests
+        run: |
+          cd build
+          ctest --output-on-failure -C ${{ matrix.build_type }}
+          
+      - name: Test Converter
+        run: |
+          .\build\${{ matrix.build_type }}\converter.exe input\horse output\test_windows_${{ matrix.build_type }}.gltf Horse
+          dir output\test_windows_${{ matrix.build_type }}.gltf
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: converter-windows-${{ matrix.build_type }}
+          path: build/${{ matrix.build_type }}/converter.exe
+
+  package:
+    name: Create Packages
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-macos, build-windows]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y mingw-w64
+          sudo apt-get install -y cmake
       
-      - name: Build Windows executable with MinGW
+      - name: Configure and Build
         run: |
-          if [ "${{ matrix.arch }}" = "x86_64" ]; then
-            x86_64-w64-mingw32-gcc -o converter-${{ matrix.arch }}.exe main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm -static -Wall -Wextra
-          else
-            i686-w64-mingw32-gcc -o converter-${{ matrix.arch }}.exe main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm -static -Wall -Wextra
-          fi
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
       
-      - name: Upload artifacts
+      - name: Create packages
+        run: |
+          cd build
+          cpack
+      
+      - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
-          name: converter-mingw-${{ matrix.arch }}
-          path: converter-${{ matrix.arch }}.exe
-
-  build-mingw-windows:
-    name: Build with MinGW on Windows
-    runs-on: windows-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup MinGW
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            mingw-w64-x86_64-gcc
-            make
-      
-      - name: Build with MinGW
-        shell: msys2 {0}
-        run: |
-          gcc -o converter.exe main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm -static -Wall -Wextra
-      
-      - name: Test converter
-        shell: msys2 {0}
-        run: |
-          ./converter.exe input/horse output/test_mingw_windows.gltf Horse
-          ls -lh output/test_mingw_windows.gltf
-      
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: converter-mingw-windows
-          path: converter.exe
+          name: packages
+          path: build/pmd-to-gltf-*

@@ -4,31 +4,44 @@ Converts 3D models and animations from PMD (model) and PSA (animation) formats t
 
 ## Build
 
-### Using Make (Recommended)
+### Using CMake
+
+```bash
+# Quick start
+cmake --preset default && cmake --build --preset default
+
+# Or step by step
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+
+# Run tests
+cd build && ctest
+
+# Available presets
+cmake --list-presets
+
+# Build configurations
+cmake --preset default    # Release build
+cmake --preset debug      # Debug build
+cmake --build --preset default
+cmake --build --preset debug
+
+# Clean
+rm -rf build
+
+# Install (optional)
+cmake --install build
+```
+
+### Legacy Make Build
 
 ```bash
 make              # Build with default compiler
 make static       # Build with static linking
-make mingw-x86_64 # Cross-compile for Windows 64-bit
-make mingw-i686   # Cross-compile for Windows 32-bit
 make test         # Build and run tests
 ```
 
-### Manual Build
 
-```bash
-gcc -o converter main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm -static
-```
-
-### MinGW Cross-Compilation
-
-To build Windows executables from Linux:
-
-```bash
-# Install MinGW
-sudo apt-get install mingw-w64
-
-# Build for Windows 64-bit
 x86_64-w64-mingw32-gcc -o converter.exe main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm -static
 
 # Build for Windows 32-bit

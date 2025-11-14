@@ -1,12 +1,9 @@
 #include "pmd_psa_types.h"
 #include "skeleton.h"
+#include "filesystem.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#ifdef _WIN32
-#include <windows.h>
-#endif
 
 // Function declarations from other modules
 PMDModel* load_pmd(const char *filename);
@@ -15,26 +12,7 @@ PSAAnimation* load_psa(const char *filename);
 void free_psa(PSAAnimation *anim);
 void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name);
 
-// Auto-detect skeleton XML file based on PMD filename
-static char* find_skeleton_file(const char *pmd_file) {
-    // Replace .pmd with .xml
-    char *skel_file = malloc(strlen(pmd_file) + 10);
-    strcpy(skel_file, pmd_file);
 
-    char *ext = strrchr(skel_file, '.');
-    if (ext && strcmp(ext, ".pmd") == 0) {
-        strcpy(ext, ".xml");
-
-        FILE *f = fopen(skel_file, "r");
-        if (f) {
-            fclose(f);
-            return skel_file;
-        }
-    }
-
-    free(skel_file);
-    return NULL;
-}
 
 // Extract animation name from PSA filename
 // Pattern: basename_animname.psa -> "animname"
@@ -141,10 +119,6 @@ int main(int argc, char *argv[]) {
     uint32_t anim_capacity = 10;
     anims = calloc(anim_capacity, sizeof(PSAAnimation*));
 
-    char psa_pattern[512];
-    snprintf(psa_pattern, sizeof(psa_pattern), "%s_", base_name);
-    size_t pattern_len = strlen(psa_pattern);
-
     // Get directory from base_name
     const char *dir_end = strrchr(base_name, '/');
     if (!dir_end) dir_end = strrchr(base_name, '\\');
@@ -157,31 +131,21 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // Load all matching PSA files (Windows-specific directory reading)
-    #ifdef _WIN32
-    WIN32_FIND_DATAA find_data;
-    char search_pattern[512];
-    snprintf(search_pattern, sizeof(search_pattern), "%s_*.psa", base_name);
-    HANDLE hFind = FindFirstFileA(search_pattern, &find_data);
-
-    if (hFind != INVALID_HANDLE_VALUE) {
-        do {
-            char psa_file[512];
-            const char *dir_part = dir_end ? "" : "";
-            if (dir_end) {
-                snprintf(psa_file, sizeof(psa_file), "%s/%s", dir, find_data.cFileName);
-            } else {
-                snprintf(psa_file, sizeof(psa_file), "%s", find_data.cFileName);
-            }
-
-            PSAAnimation *anim = load_psa(psa_file);
+    // Extract just the base filename for pattern matching
+    const char *base_filename = dir_end ? dir_end + 1 : base_name;
+    
+    // Create pattern for PSA files
+    char psa_pattern[256];
+    snprintf(psa_pattern, sizeof(psa_pattern), "%s_*.psa", base_filename);
+    
+    // Find all matching PSA files
+    FileList *psa_files = find_files(dir, psa_pattern);
+    
+    if (psa_files && psa_files->count > 0) {
+        for (uint32_t i = 0; i < psa_files->count; i++) {
+            PSAAnimation *anim = load_psa(psa_files->paths[i]);
             if (anim) {
-                // Extract just the base filename for animation naming
-                const char *base_filename = strrchr(base_name, '/');
-                if (!base_filename) base_filename = strrchr(base_name, '\\');
-                base_filename = base_filename ? base_filename + 1 : base_name;
-
-                char *anim_name = extract_anim_name(psa_file, base_filename);
+                char *anim_name = extract_anim_name(psa_files->paths[i], base_filename);
                 if (anim_name) {
                     free(anim->name);
                     anim->name = anim_name;
@@ -194,28 +158,12 @@ int main(int argc, char *argv[]) {
                 anims[anim_count++] = anim;
                 printf("  Loaded: %s (%u frames)\n", anim->name, anim->numFrames);
             }
-        } while (FindNextFileA(hFind, &find_data));
-        FindClose(hFind);
-    }
-    #else
-    // Fallback: try common animation names
-    const char *anim_names[] = {"idle", "walk", "run", "attack", "death"};
-    for (int i = 0; i < 5; i++) {
-        char psa_file[512];
-        snprintf(psa_file, sizeof(psa_file), "%s_%s.psa", base_name, anim_names[i]);
-        PSAAnimation *anim = load_psa(psa_file);
-        if (anim) {
-            free(anim->name);
-            anim->name = strdup(anim_names[i]);
-            if (anim_count >= anim_capacity) {
-                anim_capacity *= 2;
-                anims = realloc(anims, anim_capacity * sizeof(PSAAnimation*));
-            }
-            anims[anim_count++] = anim;
-            printf("  Loaded: %s (%u frames)\n", anim->name, anim->numFrames);
         }
     }
-    #endif
+    
+    if (psa_files) {
+        free_file_list(psa_files);
+    }
 
     if (anim_count == 0) {
         fprintf(stderr, "Warning: No animations found\n");

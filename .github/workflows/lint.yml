@@ -55,46 +55,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Install clang-tidy
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang-tidy
+          sudo apt-get install -y clang-tidy cmake
       
-      - name: Create compile_commands.json
+      - name: Configure CMake with compile commands
         run: |
-          cat > compile_commands.json << 'EOF'
-          [
-            {
-              "directory": "${{ github.workspace }}",
-              "command": "gcc -o converter main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm",
-              "file": "main.c"
-            },
-            {
-              "directory": "${{ github.workspace }}",
-              "command": "gcc -o converter main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm",
-              "file": "pmd_parser.c"
-            },
-            {
-              "directory": "${{ github.workspace }}",
-              "command": "gcc -o converter main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm",
-              "file": "psa_parser.c"
-            },
-            {
-              "directory": "${{ github.workspace }}",
-              "command": "gcc -o converter main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm",
-              "file": "gltf_exporter.c"
-            },
-            {
-              "directory": "${{ github.workspace }}",
-              "command": "gcc -o converter main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm",
-              "file": "skeleton.c"
-            }
-          ]
-          EOF
+          cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug
       
       - name: Run clang-tidy
         run: |
-          clang-tidy *.c -- -I. || true
+          clang-tidy --config-file=.clang-tidy -p build *.c || true
           echo "Note: This check is informational. Fix serious issues reported above."
 
   compile-warnings:
@@ -105,10 +77,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Build with strict warnings
+      - name: Install dependencies
         run: |
-          gcc -o converter main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm \
-            -Wall -Wextra -Wpedantic -Werror \
-            -Wformat=2 -Wno-unused-parameter -Wshadow \
-            -Wwrite-strings -Wstrict-prototypes -Wold-style-definition \
-            -Wredundant-decls -Wnested-externs -Wmissing-include-dirs
+          sudo apt-get update
+          sudo apt-get install -y cmake
+      
+      - name: Build with strict warnings (GCC)
+        env:
+          CC: gcc
+        run: |
+          cmake -B build-gcc -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS="-Wall -Wextra -Wpedantic -Werror -Wformat=2 -Wshadow -Wwrite-strings -Wstrict-prototypes -Wold-style-definition -Wredundant-decls -Wnested-externs -Wmissing-include-dirs"
+          cmake --build build-gcc
+      
+      - name: Build with strict warnings (Clang)
+        env:
+          CC: clang
+        run: |
+          cmake -B build-clang -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS="-Wall -Wextra -Wpedantic -Werror -Wformat=2 -Wshadow -Wwrite-strings -Wstrict-prototypes -Wold-style-definition -Wredundant-decls"
+          cmake --build build-clang

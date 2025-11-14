@@ -6,8 +6,8 @@ CFLAGS = -Wall -Wextra -O2
 LDFLAGS = -lm
 
 # Source files
-SOURCES = main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c
-HEADERS = pmd_psa_types.h skeleton.h
+SOURCES = main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c filesystem.c
+HEADERS = pmd_psa_types.h skeleton.h filesystem.h
 OBJECTS = $(SOURCES:.c=.o)
 
 # Target executable

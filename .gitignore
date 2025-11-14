@@ -66,6 +66,9 @@ cmake_install.cmake
 install_manifest.txt
 compile_commands.json
 CTestTestfile.cmake
+build*/
+_deps/
+CMakeUserPresets.json
 
 # Output files (keep directory structure but ignore generated files)
 output/*.gltf

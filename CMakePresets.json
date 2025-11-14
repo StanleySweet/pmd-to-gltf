@@ -1,0 +1,50 @@
+{
+    "version": 6,
+    "configurePresets": [
+        {
+            "name": "default",
+            "displayName": "Default Config",
+            "description": "Default build using system compiler",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "debug",
+            "displayName": "Debug Build",
+            "description": "Debug build with symbols",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "default",
+            "configurePreset": "default"
+        },
+        {
+            "name": "debug",
+            "configurePreset": "debug"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "default",
+            "configurePreset": "default",
+            "output": {
+                "outputOnFailure": true
+            }
+        }
+    ],
+    "packagePresets": [
+        {
+            "name": "default",
+            "configurePreset": "default",
+            "generators": ["TGZ"]
+        }
+    ]
+}
