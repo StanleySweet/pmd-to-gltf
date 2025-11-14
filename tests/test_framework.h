@@ -12,7 +12,7 @@
             printf("FAIL: %s - %s\n", __func__, message); \
             return 0; \
         } \
-    } while(0)
+    } while ((void)0, 0)
 
 #define TEST_ASSERT_EQ(expected, actual, message) \
     do { \
@@ -20,7 +20,7 @@
             printf("FAIL: %s - %s (expected: %d, got: %d)\n", __func__, message, (int)(expected), (int)(actual)); \
             return 0; \
         } \
-    } while(0)
+    } while ((void)0, 0)
 
 #define TEST_ASSERT_STR_EQ(expected, actual, message) \
     do { \

@@ -1,7 +1,12 @@
 #include "test_framework.h"
 #include "../filesystem.h"
-#include <unistd.h>
-#include <sys/stat.h>
+#ifdef _WIN32
+    #include <direct.h>
+    #include <io.h>
+#else
+    #include <unistd.h>
+    #include <sys/stat.h>
+#endif
 
 // Helper function to create a temporary test file
 static int create_test_file(const char *path, const char *content) {
