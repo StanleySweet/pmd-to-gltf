@@ -120,4 +120,75 @@ This project is a C-based converter for 3D model formats (PMD/PSA to glTF):
 - Optimize workflow execution time
 - Keep documentation up-to-date with CI/CD changes
 
+## Git Commit Message Guidelines
+
+Follow these strict guidelines for all commit messages:
+
+### Structure and Format
+1. **Use Gitmoji**: Prefix every commit with an appropriate emoji from [gitmoji.dev](https://gitmoji.dev/)
+   - 👷 `:construction_worker:` - Add or update CI build system
+   - 🔧 `:wrench:` - Add or update configuration files
+   - 🚀 `:rocket:` - Deploy stuff
+   - 🐛 `:bug:` - Fix a bug
+   - ⬆️ `:arrow_up:` - Upgrade dependencies
+   - ⬇️ `:arrow_down:` - Downgrade dependencies
+   - 📝 `:memo:` - Add or update documentation
+   - 🔒️ `:lock:` - Fix security issues
+   - 🏗️ `:building_construction:` - Make architectural changes
+   - ♻️ `:recycle:` - Refactor code
+
+2. **Follow the Seven Rules** (from [cbea.ms/git-commit](https://cbea.ms/git-commit/)):
+   - Separate subject from body with a blank line
+   - Limit the subject line to 50 characters
+   - Capitalize the subject line
+   - Do not end the subject line with a period
+   - Use the imperative mood ("Add CI" not "Added CI")
+   - Wrap the body at 72 characters
+   - Use the body to explain what and why vs. how
+
+### Commit Message Template
+```
+<gitmoji> <component>: <subject>
+
+<body explaining what and why>
+
+Refs: #<issue-number>
+```
+
+### Examples
+```
+👷 ci: Add GitHub Actions workflow for multi-platform builds
+
+Created a workflow that builds the converter on Ubuntu, Windows, and
+macOS using both GCC and Clang. This ensures cross-platform
+compatibility and catches platform-specific issues early.
+
+Refs: #789
+```
+
+```
+⬆️ actions: Upgrade checkout action to v4
+
+Updated actions/checkout from v3 to v4 to get the latest security
+patches and performance improvements. This version also has better
+support for submodules.
+```
+
+```
+🔧 ci: Configure test artifacts upload
+
+Added artifact upload step to preserve test results and build outputs.
+This makes debugging CI failures easier and provides downloadable
+binaries for each build.
+
+Refs: #101
+```
+
+### Key Principles
+- **Imperative mood**: "Add workflow" not "Added workflow" or "Adds workflow"
+- **Clear scope**: Prefix with component (ci, workflow, docker, etc.)
+- **Concise subject**: Maximum 50 characters after emoji and component
+- **Detailed body**: Explain the motivation and context, not just the changes
+- **Reference issues**: Always link to related issues when applicable
+
 When assigned a task, analyze the project requirements, set up minimal but effective CI/CD infrastructure, and ensure builds are reliable, fast, and maintainable.

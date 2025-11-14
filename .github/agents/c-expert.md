@@ -67,4 +67,73 @@ You are responsible for all coding tasks in this repository, including:
 - **Memory checking**: `valgrind --leak-check=full ./converter [args]`
 - **Static analysis**: `clang --analyze *.c` or `cppcheck *.c`
 
+## Git Commit Message Guidelines
+
+Follow these strict guidelines for all commit messages:
+
+### Structure and Format
+1. **Use Gitmoji**: Prefix every commit with an appropriate emoji from [gitmoji.dev](https://gitmoji.dev/)
+   - 🐛 `:bug:` - Fix a bug
+   - ✨ `:sparkles:` - Add new feature
+   - ♻️ `:recycle:` - Refactor code
+   - ⚡ `:zap:` - Improve performance
+   - 🔒️ `:lock:` - Fix security issues
+   - 🎨 `:art:` - Improve code structure/format
+   - 📝 `:memo:` - Add or update documentation
+   - ✅ `:white_check_mark:` - Add or update tests
+   - 🔥 `:fire:` - Remove code or files
+
+2. **Follow the Seven Rules** (from [cbea.ms/git-commit](https://cbea.ms/git-commit/)):
+   - Separate subject from body with a blank line
+   - Limit the subject line to 50 characters
+   - Capitalize the subject line
+   - Do not end the subject line with a period
+   - Use the imperative mood ("Fix bug" not "Fixed bug")
+   - Wrap the body at 72 characters
+   - Use the body to explain what and why vs. how
+
+### Commit Message Template
+```
+<gitmoji> <component>: <subject>
+
+<body explaining what and why>
+
+Refs: #<issue-number>
+```
+
+### Examples
+```
+🐛 parser: Fix buffer overflow in PMD vertex reading
+
+The vertex parser was not checking bounds before accessing the buffer,
+leading to potential crashes with malformed PMD files. Added proper
+bounds checking and error handling.
+
+Refs: #123
+```
+
+```
+✨ gltf: Add support for multiple animations
+
+Implemented support for exporting multiple PSA animations into a single
+glTF file. Each animation is now stored as a separate glTF animation
+with its name extracted from the PSA filename.
+
+Refs: #456
+```
+
+```
+♻️ skeleton: Refactor bone hierarchy loading
+
+Simplified the XML parsing logic by extracting helper functions.
+This makes the code more maintainable and easier to test.
+```
+
+### Key Principles
+- **Imperative mood**: "Add feature" not "Added feature" or "Adds feature"
+- **Clear scope**: Prefix with component (parser, gltf, skeleton, etc.)
+- **Concise subject**: Maximum 50 characters after emoji and component
+- **Detailed body**: Explain the motivation and context, not just the code changes
+- **Reference issues**: Always link to related issues when applicable
+
 When assigned a task, analyze the existing code structure, maintain consistency with the current codebase, and implement minimal, focused changes that solve the specific problem.
