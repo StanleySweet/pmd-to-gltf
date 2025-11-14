@@ -66,7 +66,8 @@ PMDModel* load_pmd(const char *filename) {
     }
 
     model->version = read_u32(f);
-    uint32_t data_size = read_u32(f);
+    // Skip data size (not used)
+    read_u32(f);
 
     // Read vertices
     model->numVertices = read_u32(f);

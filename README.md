@@ -4,8 +4,48 @@ Converts 3D models and animations from PMD (model) and PSA (animation) formats t
 
 ## Build
 
+### Using CMake
+
 ```bash
-gcc -o converter main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm -static
+# Quick start
+cmake --preset default && cmake --build --preset default
+
+# Or step by step
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+
+# Run tests
+cd build && ctest
+
+# Available presets
+cmake --list-presets
+
+# Build configurations
+cmake --preset default    # Release build
+cmake --preset debug      # Debug build
+cmake --build --preset default
+cmake --build --preset debug
+
+# Clean
+rm -rf build
+
+# Install (optional)
+cmake --install build
+```
+
+### Legacy Make Build
+
+```bash
+make              # Build with default compiler
+make static       # Build with static linking
+make test         # Build and run tests
+```
+
+
+x86_64-w64-mingw32-gcc -o converter.exe main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm -static
+
+# Build for Windows 32-bit
+i686-w64-mingw32-gcc -o converter.exe main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm -static
 ```
 
 ## Usage
@@ -15,6 +55,48 @@ gcc -o converter main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm
 ```
 
 The converter auto-detects `model.xml` skeleton file if not specified.
+
+## CI/CD
+
+This project uses GitHub Actions for continuous integration:
+
+- **Build workflow** (`.github/workflows/build.yml`):
+  - Linux builds with GCC and Clang
+  - macOS builds
+  - MinGW cross-compilation (x86_64 and i686)
+  - MinGW native builds on Windows via MSYS2
+
+- **Lint workflow** (`.github/workflows/lint.yml`):
+  - Cppcheck static analysis
+  - Clang-format code formatting checks
+  - Clang-tidy analysis
+  - Strict compiler warnings
+
+All workflows run on push and pull requests to main branches.
+
+## Development
+
+### Code Quality Tools
+
+```bash
+make lint    # Run static analysis with cppcheck
+make format  # Format code with clang-format
+```
+
+### Linting
+
+Install linting tools:
+
+```bash
+sudo apt-get install cppcheck clang-format clang-tidy
+```
+
+Run checks:
+
+```bash
+cppcheck --enable=all --suppress=missingIncludeSystem --std=c99 *.c *.h
+clang-format -i *.c *.h  # Format in-place
+```
 
 ## Features
 

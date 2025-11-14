@@ -53,8 +53,9 @@ PSAAnimation* load_psa(const char *filename) {
         return NULL;
     }
 
-    uint32_t version = read_u32(f);
-    uint32_t data_size = read_u32(f);
+    // Skip version and data size (not used)
+    read_u32(f); // version
+    read_u32(f); // data_size
 
     // Read name
     uint32_t nameLen = read_u32(f);

@@ -1,0 +1,99 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cppcheck:
+    name: Static Analysis with Cppcheck
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install cppcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck
+      
+      - name: Run cppcheck
+        run: |
+          cppcheck --enable=all --suppress=missingIncludeSystem --inconclusive --std=c99 *.c *.h || echo "cppcheck found issues - these should be reviewed"
+
+  clang-format:
+    name: Check Code Formatting
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+      
+      - name: Check formatting
+        run: |
+          # Check if files would be reformatted
+          clang-format --dry-run --Werror *.c *.h || true
+          echo "Note: This check is informational. Run 'clang-format -i *.c *.h' to fix formatting."
+
+  clang-tidy:
+    name: Clang-Tidy Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy cmake
+      
+      - name: Configure CMake with compile commands
+        run: |
+          cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug
+      
+      - name: Run clang-tidy
+        run: |
+          clang-tidy --config-file=.clang-tidy -p build *.c || true
+          echo "Note: This check is informational. Fix serious issues reported above."
+
+  compile-warnings:
+    name: Check Compiler Warnings
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake
+      
+      - name: Build with strict warnings (GCC)
+        env:
+          CC: gcc
+        run: |
+          cmake -B build-gcc -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS="-Wall -Wextra -Wpedantic -Werror -Wformat=2 -Wshadow -Wwrite-strings -Wstrict-prototypes -Wold-style-definition -Wredundant-decls -Wnested-externs -Wmissing-include-dirs"
+          cmake --build build-gcc
+      
+      - name: Build with strict warnings (Clang)
+        env:
+          CC: clang
+        run: |
+          cmake -B build-clang -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS="-Wall -Wextra -Wpedantic -Werror -Wformat=2 -Wshadow -Wwrite-strings -Wstrict-prototypes -Wold-style-definition -Wredundant-decls"
+          cmake --build build-clang

@@ -11,7 +11,10 @@ static char* create_data_uri(const void *data, size_t size) {
 
     size_t encoded_size = 4 * ((size + 2) / 3);
     char *encoded = calloc(encoded_size + 100, 1);
-    strcpy(encoded, "data:application/octet-stream;base64,");
+    const char *prefix = "data:application/octet-stream;base64,";
+    size_t prefix_len = strlen(prefix);
+    memcpy(encoded, prefix, prefix_len);
+    encoded[prefix_len] = '\0';
 
     const unsigned char *bytes = (const unsigned char *)data;
     char *out = encoded + strlen(encoded);
@@ -31,22 +34,7 @@ static char* create_data_uri(const void *data, size_t size) {
     return encoded;
 }
 
-static int find_prop_parent_bone(const char *prop_name, SkeletonDef *skel) {
-    if (!skel || !prop_name) return -1;
 
-    const char *bone_part = strstr(prop_name, "prop_");
-    if (!bone_part) bone_part = strstr(prop_name, "prop-");
-    if (!bone_part) bone_part = strstr(prop_name, "prop.");
-    if (bone_part) bone_part += 5;
-    else bone_part = prop_name;
-
-    for (int i = 0; i < skel->bone_count; i++) {
-        if (strstr(skel->bones[i].name, bone_part)) {
-            return i;
-        }
-    }
-    return -1;
-}
 
 // Quaternion inverse
 static Quaternion quat_inverse(Quaternion q) {
@@ -101,7 +89,7 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
         return;
     }
 
-    uint32_t skel_bones = skel ? skel->bone_count : model->numBones;
+    uint32_t skel_bones = skel ? (uint32_t)skel->bone_count : model->numBones;
     uint32_t total_bones = model->numBones + model->numPropPoints;
 
     // Create bone index mapping: exclude only root (index 0) from skinning
@@ -171,7 +159,7 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
 
                 int joint_idx = bone_to_joint[bone_idx];
                 if (joint_idx >= 0) {
-                    joints[i*4+valid_count] = joint_idx;
+                    joints[i*4+valid_count] = (uint16_t)joint_idx;
                     weights[i*4+valid_count] = model->vertices[i].blend.weights[j];
                     total_weight += model->vertices[i].blend.weights[j];
                     valid_count++;
@@ -268,25 +256,25 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
                 anim_data[a].translations[b] = calloc(anim->numFrames * 3, sizeof(float));
                 anim_data[a].rotations[b] = calloc(anim->numFrames * 4, sizeof(float));
 
-                for (uint32_t f = 0; f < anim->numFrames; f++) {
-                    BoneState *state = &anim->boneStates[f * anim->numBones + b];
+                for (uint32_t frame = 0; frame < anim->numFrames; frame++) {
+                    BoneState *state = &anim->boneStates[frame * anim->numBones + b];
 
                     // Convert world space to local space if bone has parent
                     BoneState local_state = *state;
-                    if (skel && b < skel->bone_count && skel->bones[b].parent_index != -1) {
+                    if (skel && b < (uint32_t)skel->bone_count && skel->bones[b].parent_index != -1) {
                         int parent_idx = skel->bones[b].parent_index;
-                        BoneState *parent_state = &anim->boneStates[f * anim->numBones + parent_idx];
+                        BoneState *parent_state = &anim->boneStates[frame * anim->numBones + parent_idx];
                         compute_local_transform(&local_state, state, parent_state);
                     }
 
-                    anim_data[a].translations[b][f*3 + 0] = local_state.translation.x;
-                    anim_data[a].translations[b][f*3 + 1] = local_state.translation.y;
-                    anim_data[a].translations[b][f*3 + 2] = local_state.translation.z;
+                    anim_data[a].translations[b][frame*3 + 0] = local_state.translation.x;
+                    anim_data[a].translations[b][frame*3 + 1] = local_state.translation.y;
+                    anim_data[a].translations[b][frame*3 + 2] = local_state.translation.z;
 
-                    anim_data[a].rotations[b][f*4 + 0] = local_state.rotation.x;
-                    anim_data[a].rotations[b][f*4 + 1] = local_state.rotation.y;
-                    anim_data[a].rotations[b][f*4 + 2] = local_state.rotation.z;
-                    anim_data[a].rotations[b][f*4 + 3] = local_state.rotation.w;
+                    anim_data[a].rotations[b][frame*4 + 0] = local_state.rotation.x;
+                    anim_data[a].rotations[b][frame*4 + 1] = local_state.rotation.y;
+                    anim_data[a].rotations[b][frame*4 + 2] = local_state.rotation.z;
+                    anim_data[a].rotations[b][frame*4 + 3] = local_state.rotation.w;
                 }
 
                 anim_data[a].trans_uris[b] = create_data_uri(anim_data[a].translations[b], anim_data[a].trans_size);
@@ -346,7 +334,7 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
 
         if (i < model->numBones) {
             // Regular skeleton bones
-            if (skel && i < skel->bone_count) {
+            if (skel && i < (uint32_t)skel->bone_count) {
                 fprintf(f, "\"name\": \"%s\"", skel->bones[i].name);
             } else {
                 fprintf(f, "\"name\": \"bone_%u\"", i);
@@ -362,7 +350,7 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
         if (i < model->numBones) {
             // Regular skeleton bone
             transform = model->restStates[i];
-            if (skel && i < skel->bone_count && skel->bones[i].parent_index != -1) {
+            if (skel && i < (uint32_t)skel->bone_count && skel->bones[i].parent_index != -1) {
                 int parent_idx = skel->bones[i].parent_index;
                 compute_local_transform(&transform, &model->restStates[i], &model->restStates[parent_idx]);
             }
@@ -503,23 +491,19 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
 
     // Animation buffers for ALL animations
     if (anim_data) {
-        uint32_t buf_idx = 7;
         for (uint32_t a = 0; a < anim_count; a++) {
             if (!anims[a] || anims[a]->numFrames == 0) continue;
 
             fprintf(f, ",\n");
             // Buffer for time samples
             fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"}", anim_data[a].times_size, anim_data[a].times_uri);
-            buf_idx++;
 
             // Buffers for per-bone translations and rotations
             for (uint32_t b = 0; b < anim_data[a].num_bones; b++) {
                 fprintf(f, ",\n");
                 fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"}", anim_data[a].trans_size, anim_data[a].trans_uris[b]);
-                buf_idx++;
                 fprintf(f, ",\n");
                 fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"}", anim_data[a].rot_size, anim_data[a].rot_uris[b]);
-                buf_idx++;
             }
         }
     }

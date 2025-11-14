@@ -29,9 +29,9 @@ static int parse_attribute(const char **p, const char *attr_name, char *value, i
     const char *end = strchr(start, quote);
     if (!end) return 0;
 
-    int len = end - start;
+    int len = (int)(end - start);
     if (len >= max_len) len = max_len - 1;
-    strncpy(value, start, len);
+    memcpy(value, start, (size_t)len);
     value[len] = '\0';
 
     *p = end + 1;
@@ -67,7 +67,12 @@ static void parse_bones_recursive(const char **p, SkeletonDef *skel, int parent_
 
         // Add bone to skeleton
         if (skel->bone_count < MAX_BONES) {
-            strcpy(skel->bones[skel->bone_count].name, bone_name);
+            size_t name_len = strlen(bone_name);
+            if (name_len >= sizeof(skel->bones[skel->bone_count].name)) {
+                name_len = sizeof(skel->bones[skel->bone_count].name) - 1;
+            }
+            memcpy(skel->bones[skel->bone_count].name, bone_name, name_len);
+            skel->bones[skel->bone_count].name[name_len] = '\0';
             skel->bones[skel->bone_count].parent_index = parent_idx;
             int current_idx = skel->bone_count;
             skel->bone_count++;
@@ -100,8 +105,8 @@ SkeletonDef* load_skeleton_xml(const char *filename, const char *skeleton_id) {
     long size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    char *content = malloc(size + 1);
-    fread(content, 1, size, f);
+    char *content = malloc((size_t)size + 1);
+    fread(content, 1, (size_t)size, f);
     content[size] = '\0';
     fclose(f);
 
