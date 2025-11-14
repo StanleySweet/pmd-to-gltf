@@ -1,0 +1,111 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+jobs:
+  cppcheck:
+    name: Static Analysis with Cppcheck
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install cppcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck
+      
+      - name: Run cppcheck
+        run: |
+          cppcheck --enable=all --suppress=missingIncludeSystem --inconclusive --std=c99 *.c *.h || echo "cppcheck found issues - these should be reviewed"
+
+  clang-format:
+    name: Check Code Formatting
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+      
+      - name: Check formatting
+        run: |
+          # Check if files would be reformatted
+          clang-format --dry-run --Werror *.c *.h || true
+          echo "Note: This check is informational. Run 'clang-format -i *.c *.h' to fix formatting."
+
+  clang-tidy:
+    name: Clang-Tidy Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install clang-tidy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy
+      
+      - name: Create compile_commands.json
+        run: |
+          cat > compile_commands.json << 'EOF'
+          [
+            {
+              "directory": "${{ github.workspace }}",
+              "command": "gcc -o converter main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm",
+              "file": "main.c"
+            },
+            {
+              "directory": "${{ github.workspace }}",
+              "command": "gcc -o converter main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm",
+              "file": "pmd_parser.c"
+            },
+            {
+              "directory": "${{ github.workspace }}",
+              "command": "gcc -o converter main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm",
+              "file": "psa_parser.c"
+            },
+            {
+              "directory": "${{ github.workspace }}",
+              "command": "gcc -o converter main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm",
+              "file": "gltf_exporter.c"
+            },
+            {
+              "directory": "${{ github.workspace }}",
+              "command": "gcc -o converter main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm",
+              "file": "skeleton.c"
+            }
+          ]
+          EOF
+      
+      - name: Run clang-tidy
+        run: |
+          clang-tidy *.c -- -I. || true
+          echo "Note: This check is informational. Fix serious issues reported above."
+
+  compile-warnings:
+    name: Check Compiler Warnings
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Build with strict warnings
+        run: |
+          gcc -o converter main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c -lm \
+            -Wall -Wextra -Wpedantic -Werror \
+            -Wformat=2 -Wno-unused-parameter -Wshadow \
+            -Wwrite-strings -Wstrict-prototypes -Wold-style-definition \
+            -Wredundant-decls -Wnested-externs -Wmissing-include-dirs
