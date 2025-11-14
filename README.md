@@ -50,7 +50,6 @@ This project uses GitHub Actions for continuous integration:
 - **Build workflow** (`.github/workflows/build.yml`):
   - Linux builds with GCC and Clang
   - macOS builds
-  - Windows builds with MSVC
   - MinGW cross-compilation (x86_64 and i686)
   - MinGW native builds on Windows via MSYS2
 

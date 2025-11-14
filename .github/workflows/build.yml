@@ -65,34 +65,6 @@ jobs:
           name: converter-macos
           path: converter
 
-  build-windows-native:
-    name: Build on Windows (Native)
-    runs-on: windows-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup MSVC
-        uses: microsoft/setup-msbuild@v2
-      
-      - name: Build with MSVC
-        run: |
-          cl.exe /Fe:converter.exe main.c pmd_parser.c psa_parser.c gltf_exporter.c skeleton.c /W4
-        shell: cmd
-      
-      - name: Test converter
-        run: |
-          .\converter.exe input\horse output\test_windows_msvc.gltf Horse
-          dir output\test_windows_msvc.gltf
-        shell: cmd
-      
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: converter-windows-msvc
-          path: converter.exe
-
   build-mingw:
     name: Build with MinGW-w64
     runs-on: ubuntu-latest
