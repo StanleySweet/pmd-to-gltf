@@ -61,14 +61,35 @@ install(TARGETS converter
 # Testing
 enable_testing()
 
-# Add a simple test if input files exist
+# Unit tests
+add_executable(test_filesystem tests/test_filesystem.c filesystem.c)
+target_include_directories(test_filesystem PRIVATE .)
+if(NOT WIN32)
+    target_link_libraries(test_filesystem PRIVATE m)
+endif()
+
+add_executable(test_animation tests/test_animation.c)
+target_include_directories(test_animation PRIVATE .)
+
+add_executable(test_types tests/test_types.c)
+target_include_directories(test_types PRIVATE .)
+if(NOT WIN32)
+    target_link_libraries(test_types PRIVATE m)
+endif()
+
+# Register unit tests
+add_test(NAME unit_filesystem COMMAND test_filesystem)
+add_test(NAME unit_animation COMMAND test_animation)
+add_test(NAME unit_types COMMAND test_types)
+
+# Integration test - Add a simple test if input files exist
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/input/horse.pmd")
     add_test(
-        NAME converter_test
+        NAME integration_converter_test
         COMMAND $<TARGET_FILE:converter> input/horse output/cmake_test.gltf Horse
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     )
-    set_tests_properties(converter_test PROPERTIES
+    set_tests_properties(integration_converter_test PROPERTIES
         PASS_REGULAR_EXPRESSION "Done! Exported [0-9]+ animation"
     )
 endif()
