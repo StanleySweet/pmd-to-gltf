@@ -19,6 +19,7 @@ Pour une documentation complète sur la suite de tests, voir [docs/test-suite.md
 - `test_pmd_cubes.c` - Tests d'intégration pour les cubes de test PMD
 - `test_horse_model.c` - Tests d'intégration pour le modèle du cheval
 - `test_gltf_output.c` - Tests de validation de la sortie glTF
+- `test_gltf_roundtrip.c` - Tests de validation aller-retour (round-trip) PMD → glTF → validation
 - `generate_test_data.c` - Générateur de fichiers PMD/PSA de test
 - `run_tests.sh` - Script pour exécuter tous les tests manuellement
 
@@ -74,6 +75,7 @@ ctest -R unit_filesystem --output-on-failure
 - **integration_cube_4bones** : Conversion cube 4 os + animation vers glTF
 - **integration_cube_5bones** : Conversion cube 5 os hiérarchique + animation vers glTF
 - **validation_gltf_output** : Validation de la structure et du contenu des fichiers glTF générés
+- **validation_gltf_roundtrip** : Tests aller-retour (round-trip) - décodage base64, validation des positions de vertex, préservation des dimensions
 
 ## Framework de test
 

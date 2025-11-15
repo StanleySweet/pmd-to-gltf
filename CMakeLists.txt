@@ -99,6 +99,12 @@ if(NOT WIN32)
     target_link_libraries(test_horse_model PRIVATE m)
 endif()
 
+add_executable(test_gltf_roundtrip tests/test_gltf_roundtrip.c pmd_parser.c)
+target_include_directories(test_gltf_roundtrip PRIVATE .)
+if(NOT WIN32)
+    target_link_libraries(test_gltf_roundtrip PRIVATE m)
+endif()
+
 # Register unit tests
 add_test(NAME unit_filesystem COMMAND test_filesystem)
 add_test(NAME unit_animation COMMAND test_animation)
@@ -151,6 +157,13 @@ set_tests_properties(integration_cube_5bones PROPERTIES
 # Validate glTF output - runs after conversion tests
 add_test(NAME validation_gltf_output COMMAND test_gltf_output)
 set_tests_properties(validation_gltf_output PROPERTIES
+    FIXTURES_REQUIRED gltf_outputs
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# Round-trip validation - verify glTF data matches original PMD
+add_test(NAME validation_gltf_roundtrip COMMAND test_gltf_roundtrip)
+set_tests_properties(validation_gltf_roundtrip PROPERTIES
     FIXTURES_REQUIRED gltf_outputs
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
