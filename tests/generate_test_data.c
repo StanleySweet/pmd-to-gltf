@@ -177,12 +177,12 @@ static PSAAnimation* create_cube_animation(int numBones, int numFrames) {
     
     if (numBones == 4) {
         // Animate 4 corner bones with simple rotation
-        for (uint32_t frame = 0; frame < numFrames; frame++) {
+        for (uint32_t frame = 0; frame < (uint32_t)numFrames; frame++) {
             float t = (float)frame / (float)(numFrames - 1);
             float angle = t * 3.14159f * 2.0f;  // Full rotation over animation
             
             for (int bone = 0; bone < 4; bone++) {
-                int idx = frame * numBones + bone;
+                int idx = (int)(frame * (uint32_t)numBones + (uint32_t)bone);
                 
                 // Keep positions constant (same as rest state)
                 if (bone == 0) anim->boneStates[idx].translation = (Vector3D){-1.0f, -1.0f, -1.0f};
@@ -196,12 +196,12 @@ static PSAAnimation* create_cube_animation(int numBones, int numFrames) {
         }
     } else if (numBones == 5) {
         // Animate 5 bones (4 corners + center)
-        for (uint32_t frame = 0; frame < numFrames; frame++) {
+        for (uint32_t frame = 0; frame < (uint32_t)numFrames; frame++) {
             float t = (float)frame / (float)(numFrames - 1);
             float angle = t * 3.14159f * 2.0f;
             
             for (int bone = 0; bone < 5; bone++) {
-                int idx = frame * numBones + bone;
+                int idx = (int)(frame * (uint32_t)numBones + (uint32_t)bone);
                 
                 // Keep positions constant
                 if (bone == 0) anim->boneStates[idx].translation = (Vector3D){-1.0f, -1.0f, -1.0f};
@@ -227,7 +227,8 @@ int main(void) {
     printf("Generating test PMD and PSA files...\n");
     
     // Create output directory if it doesn't exist
-    system("mkdir -p tests/data");
+    int result = system("mkdir -p tests/data");
+    (void)result;  // Intentionally ignore result
     
     // 1. Cube with no bones
     printf("Creating cube_nobones.pmd...\n");

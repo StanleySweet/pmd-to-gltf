@@ -14,7 +14,8 @@ static char* read_file(const char *filename) {
     fseek(f, 0, SEEK_SET);
     
     char *content = malloc(size + 1);
-    fread(content, 1, size, f);
+    size_t bytes_read = fread(content, 1, size, f);
+    (void)bytes_read;  // Intentionally ignore result
     content[size] = '\0';
     fclose(f);
     
