@@ -218,10 +218,11 @@ static int test_gltf_json_validity(void) {
         "tests/output/cube_nobones.gltf",
         "tests/output/cube_4bones.gltf",
         "tests/output/cube_5bones.gltf",
+        "tests/output/cube_2bones_2props.gltf",
         "output/cmake_test.gltf"
     };
     
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         FILE *f = fopen(files[i], "r");
         if (!f) continue;  // Skip if file doesn't exist
         
