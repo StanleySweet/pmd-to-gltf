@@ -49,6 +49,8 @@ build/
 dist/
 bin/
 obj/
+_codeql_build_dir/
+_codeql_detected_source_root
 
 # IDE and Editor files
 .vscode/
