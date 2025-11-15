@@ -567,7 +567,9 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
     }
     // Prop point bones: numBones through numBones+numPropPoints-1
     for (uint32_t i = 0; i < model->numPropPoints; i++) {
-        fprintf(f, ", ");
+        if (skinnable_bones > 0 || i > 0) {
+            fprintf(f, ", ");
+        }
         uint32_t node_index = model->numBones + i + 2;
         fprintf(f, "%u", node_index);
     }
