@@ -91,3 +91,6 @@ tests/output/*.bin
 # Core dumps
 core
 vgcore.*
+
+docs/collada
+docs/pmd2collada

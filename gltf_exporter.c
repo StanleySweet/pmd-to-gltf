@@ -82,47 +82,8 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
     local->translation = quat_rotate(parent_inv, diff);
 }
 
-// Compute inverse bind matrix from bone's rest pose transform
-// IBM transforms from world space to bone's local space
-static void compute_inverse_bind_matrix(float *ibm, const BoneState *rest_pose) {
-    // Convert quaternion to rotation matrix
-    float qx = rest_pose->rotation.x;
-    float qy = rest_pose->rotation.y;
-    float qz = rest_pose->rotation.z;
-    float qw = rest_pose->rotation.w;
-    
-    float xx = qx * qx, yy = qy * qy, zz = qz * qz;
-    float xy = qx * qy, xz = qx * qz, yz = qy * qz;
-    float wx = qw * qx, wy = qw * qy, wz = qw * qz;
-    
-    // Rotation matrix (column-major)
-    float r[16] = {
-        1.0f - 2.0f * (yy + zz), 2.0f * (xy + wz),        2.0f * (xz - wy),        0.0f,
-        2.0f * (xy - wz),        1.0f - 2.0f * (xx + zz), 2.0f * (yz + wx),        0.0f,
-        2.0f * (xz + wy),        2.0f * (yz - wx),        1.0f - 2.0f * (xx + yy), 0.0f,
-        0.0f,                    0.0f,                    0.0f,                    1.0f
-    };
-    
-    // Add translation to create transform matrix
-    r[12] = rest_pose->translation.x;
-    r[13] = rest_pose->translation.y;
-    r[14] = rest_pose->translation.z;
-    
-    // Compute inverse: for rigid body transform, inverse is transpose of rotation with inverted translation
-    // R^-1 = R^T, T^-1 = -R^T * T
-    float inv_tx = -(r[0] * rest_pose->translation.x + r[1] * rest_pose->translation.y + r[2] * rest_pose->translation.z);
-    float inv_ty = -(r[4] * rest_pose->translation.x + r[5] * rest_pose->translation.y + r[6] * rest_pose->translation.z);
-    float inv_tz = -(r[8] * rest_pose->translation.x + r[9] * rest_pose->translation.y + r[10] * rest_pose->translation.z);
-    
-    // Inverse bind matrix (column-major)
-    ibm[0] = r[0];  ibm[4] = r[1];  ibm[8]  = r[2];  ibm[12] = inv_tx;
-    ibm[1] = r[4];  ibm[5] = r[5];  ibm[9]  = r[6];  ibm[13] = inv_ty;
-    ibm[2] = r[8];  ibm[6] = r[9];  ibm[10] = r[10]; ibm[14] = inv_tz;
-    ibm[3] = 0.0f;  ibm[7] = 0.0f;  ibm[11] = 0.0f;  ibm[15] = 1.0f;
-}
-
 void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name) {
-    FILE *f = fopen(output_file, "wb");
+    FILE *f = fopen(output_file, "w");
     if (!f) {
         fprintf(stderr, "Failed to create output file\n");
         return;
@@ -236,22 +197,14 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
     }
 
     // Compute inverse bind matrices from rest pose
-    // PMD vertices are in world space, so we need proper IBMs to transform them to bone space
-    // Each IBM is the inverse of the bone's world-space rest transform
+    // Vertices are in world space matching rest pose, so use identity matrices
+    // IBMs for skeleton bones + prop points (prop points also get identity since they don't deform)
     uint32_t total_ibm_count = skinnable_bones + model->numPropPoints;
     size_t ibm_size = total_ibm_count * 16 * sizeof(float);
     float *ibm = calloc(total_ibm_count * 16, sizeof(float));
-    
-    // Compute IBMs for skinnable bones (excluding root if present)
-    for (uint32_t i = 0; i < skinnable_bones; i++) {
-        uint32_t bone_idx = (skel && model->numBones > 1) ? i + 1 : i;  // Skip root bone if present
-        uint32_t ibm_idx = i * 16;
-        compute_inverse_bind_matrix(&ibm[ibm_idx], &model->restStates[bone_idx]);
-    }
-    
-    // Prop points get identity IBMs since they don't deform vertices
-    for (uint32_t i = 0; i < model->numPropPoints; i++) {
-        uint32_t idx = (skinnable_bones + i) * 16;
+    for (uint32_t i = 0; i < total_ibm_count; i++) {
+        uint32_t idx = i * 16;
+        // Identity matrix in column-major order
         ibm[idx + 0] = 1.0f; ibm[idx + 4] = 0.0f; ibm[idx + 8]  = 0.0f; ibm[idx + 12] = 0.0f;
         ibm[idx + 1] = 0.0f; ibm[idx + 5] = 1.0f; ibm[idx + 9]  = 0.0f; ibm[idx + 13] = 0.0f;
         ibm[idx + 2] = 0.0f; ibm[idx + 6] = 0.0f; ibm[idx + 10] = 1.0f; ibm[idx + 14] = 0.0f;
@@ -562,16 +515,12 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
     // Skeleton bones: 1 through numBones-1
     for (uint32_t i = 0; i < skinnable_bones; i++) {
         // Node index = bone index + 2, but we're skipping root (bone 0), so it's (i+1)+2 = i+3
-        if (i > 0) fprintf(f, ", ");
-        fprintf(f, "%u", i + 3);
+        fprintf(f, "%u, ", i + 3);
     }
     // Prop point bones: numBones through numBones+numPropPoints-1
     for (uint32_t i = 0; i < model->numPropPoints; i++) {
-        if (skinnable_bones > 0 || i > 0) {
-            fprintf(f, ", ");
-        }
         uint32_t node_index = model->numBones + i + 2;
-        fprintf(f, "%u", node_index);
+        fprintf(f, "%u%s", node_index, (i < model->numPropPoints - 1) ? ", " : "");
     }
     fprintf(f, "]}]");
 

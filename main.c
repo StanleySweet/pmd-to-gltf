@@ -11,6 +11,7 @@ void free_pmd(PMDModel *model);
 PSAAnimation* load_psa(const char *filename);
 void free_psa(PSAAnimation *anim);
 void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name);
+char* get_first_skeleton_id(const char *filename);
 
 
 
@@ -49,26 +50,38 @@ static char* extract_anim_name(const char *psa_file, const char *basename) {
 int main(int argc, char *argv[]) {
 
     if (argc < 2) {
-        printf("Usage: %s <base_name> [output.gltf] [skeleton_id] [--print-bones]\n", argv[0]);
+        printf("Usage: %s <base_name> [--print-bones]\n", argv[0]);
         printf("  Loads: <base_name>.pmd, <base_name>.xml, <base_name>_*.psa\n");
-        printf("  Example: %s horse output.gltf Horse\n", argv[0]);
+        printf("  Outputs: output/<filename>.gltf\n");
+        printf("  Example: %s input/model\n", argv[0]);
         printf("  Option: --print-bones to print all bone transforms and exit.\n");
         return 1;
     }
 
     const char *base_name = argv[1];
-    const char *output_file = (argc >= 3) ? argv[2] : "output.gltf";
-    const char *skeleton_id = (argc >= 4) ? argv[3] : "Armature";
+    
+    // Always auto-detect skeleton ID from XML file
+    char *auto_skeleton_id = NULL;
+    const char *skeleton_id = NULL;
+
+    // Check for --print-bones option
     int print_bones = 0;
-    for (int i = 1; i < argc; ++i) {
+    for (int i = 2; i < argc; ++i) {
         if (strcmp(argv[i], "--print-bones") == 0) print_bones = 1;
     }
 
     // Build filenames from base name
     char pmd_file[512];
     char skeleton_file[512];
+    char output_file[512];
     snprintf(pmd_file, sizeof(pmd_file), "%s.pmd", base_name);
     snprintf(skeleton_file, sizeof(skeleton_file), "%s.xml", base_name);
+    
+    // Extract just the base filename for output
+    const char *output_basename = strrchr(base_name, '/');
+    if (!output_basename) output_basename = strrchr(base_name, '\\');
+    output_basename = output_basename ? output_basename + 1 : base_name;
+    snprintf(output_file, sizeof(output_file), "output/%s.gltf", output_basename);
 
 
     printf("Loading PMD: %s\n", pmd_file);
@@ -102,13 +115,26 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
+    // Auto-detect skeleton ID from XML file if it exists
+    auto_skeleton_id = get_first_skeleton_id(skeleton_file);
+    if (auto_skeleton_id) {
+        skeleton_id = auto_skeleton_id;
+        printf("Auto-detected skeleton ID: %s\n", skeleton_id);
+    } else {
+        printf("No skeleton XML file found - proceeding without skeleton names\n");
+        skeleton_id = NULL; // Will proceed without skeleton
+    }
+
     // Load skeleton hierarchy
-    printf("Loading skeleton: %s (id: %s)\n", skeleton_file, skeleton_id);
-    SkeletonDef *skel = load_skeleton_xml(skeleton_file, skeleton_id);
-    if (skel) {
-        printf("  Loaded %d bones\n", skel->bone_count);
-        if (model->numBones > (uint32_t)skel->bone_count) {
-            printf("  Note: %u extra bones\n", model->numBones - skel->bone_count);
+    SkeletonDef *skel = NULL;
+    if (skeleton_id) {
+        printf("Loading skeleton: %s (id: %s)\n", skeleton_file, skeleton_id);
+        skel = load_skeleton_xml(skeleton_file, skeleton_id);
+        if (skel) {
+            printf("  Loaded %d bones\n", skel->bone_count);
+            if (model->numBones > (uint32_t)skel->bone_count) {
+                printf("  Note: %u extra bones\n", model->numBones - skel->bone_count);
+            }
         }
     }
 
@@ -180,6 +206,10 @@ int main(int argc, char *argv[]) {
 
     printf("Done! Exported %u animation(s)\n", anim_count);
 
+    // Cleanup
+    if (auto_skeleton_id) {
+        free(auto_skeleton_id);
+    }
     if (skel) free_skeleton(skel);
     for (uint32_t i = 0; i < anim_count; i++) {
         free_psa(anims[i]);

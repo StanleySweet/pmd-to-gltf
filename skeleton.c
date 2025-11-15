@@ -136,6 +136,54 @@ SkeletonDef* load_skeleton_xml(const char *filename, const char *skeleton_id) {
     return skel;
 }
 
+char* get_first_skeleton_id(const char *filename) {
+    FILE *f = fopen(filename, "r");
+    if (!f) {
+        return NULL;
+    }
+
+    // Read entire file
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    char *content = malloc((size_t)size + 1);
+    fread(content, 1, (size_t)size, f);
+    content[size] = '\0';
+    fclose(f);
+
+    // Find first <standard_skeleton tag
+    const char *skel_start = strstr(content, "<standard_skeleton");
+    if (!skel_start) {
+        free(content);
+        return NULL;
+    }
+
+    // Find id attribute
+    const char *id_start = strstr(skel_start, "id=\"");
+    if (!id_start) {
+        free(content);
+        return NULL;
+    }
+    id_start += 4; // skip 'id="'
+
+    // Find end quote
+    const char *id_end = strchr(id_start, '"');
+    if (!id_end) {
+        free(content);
+        return NULL;
+    }
+
+    // Copy ID to new string
+    size_t id_len = (size_t)(id_end - id_start);
+    char *skeleton_id = malloc(id_len + 1);
+    memcpy(skeleton_id, id_start, id_len);
+    skeleton_id[id_len] = '\0';
+
+    free(content);
+    return skeleton_id;
+}
+
 void free_skeleton(SkeletonDef *skel) {
     free(skel);
 }

@@ -33,10 +33,10 @@ if [ $? -eq 0 ]; then
     # Run a quick integration test manually
     echo "Running manual integration test..."
     if [ -f "../input/horse.pmd" ]; then
-        ./converter ../input/horse ../output/test_suite_output.gltf Horse > /dev/null 2>&1
+        ./converter ../input/horse > /dev/null 2>&1
         if [ $? -eq 0 ]; then
             echo "✅ Manual integration test passed!"
-            ls -lh ../output/test_suite_output.gltf
+            ls -lh ../output/horse.gltf
         else
             echo "❌ Manual integration test failed!"
             exit 1

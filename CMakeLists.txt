@@ -126,7 +126,7 @@ set_tests_properties(integration_pmd_cubes PROPERTIES
 # Integration tests - Convert test cubes to glTF
 add_test(
     NAME integration_cube_nobones
-    COMMAND $<TARGET_FILE:converter> tests/data/cube_nobones tests/output/cube_nobones.gltf
+    COMMAND $<TARGET_FILE:converter> tests/data/cube_nobones
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 set_tests_properties(integration_cube_nobones PROPERTIES
@@ -136,7 +136,7 @@ set_tests_properties(integration_cube_nobones PROPERTIES
 
 add_test(
     NAME integration_cube_4bones
-    COMMAND $<TARGET_FILE:converter> tests/data/cube_4bones tests/output/cube_4bones.gltf
+    COMMAND $<TARGET_FILE:converter> tests/data/cube_4bones
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 set_tests_properties(integration_cube_4bones PROPERTIES
@@ -146,7 +146,7 @@ set_tests_properties(integration_cube_4bones PROPERTIES
 
 add_test(
     NAME integration_cube_5bones
-    COMMAND $<TARGET_FILE:converter> tests/data/cube_5bones tests/output/cube_5bones.gltf
+    COMMAND $<TARGET_FILE:converter> tests/data/cube_5bones
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 set_tests_properties(integration_cube_5bones PROPERTIES
@@ -156,7 +156,7 @@ set_tests_properties(integration_cube_5bones PROPERTIES
 
 add_test(
     NAME integration_cube_2bones_2props
-    COMMAND $<TARGET_FILE:converter> tests/data/cube_2bones_2props tests/output/cube_2bones_2props.gltf
+    COMMAND $<TARGET_FILE:converter> tests/data/cube_2bones_2props
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 set_tests_properties(integration_cube_2bones_2props PROPERTIES
@@ -188,7 +188,7 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/input/horse.pmd")
     
     add_test(
         NAME integration_converter_test
-        COMMAND $<TARGET_FILE:converter> input/horse output/cmake_test.gltf Horse
+        COMMAND $<TARGET_FILE:converter> input/horse
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     )
     set_tests_properties(integration_converter_test PROPERTIES

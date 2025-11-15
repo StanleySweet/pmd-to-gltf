@@ -18,6 +18,8 @@ typedef struct {
 
 // Parse skeleton XML and return bone hierarchy
 SkeletonDef* load_skeleton_xml(const char *filename, const char *skeleton_id);
+// Extract the first skeleton ID from XML file
+char* get_first_skeleton_id(const char *filename);
 void free_skeleton(SkeletonDef *skel);
 
 #endif
