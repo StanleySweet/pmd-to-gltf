@@ -61,6 +61,13 @@ install(TARGETS converter
 # Testing
 enable_testing()
 
+# Test data generator
+add_executable(generate_test_data tests/generate_test_data.c pmd_writer.c)
+target_include_directories(generate_test_data PRIVATE .)
+if(NOT WIN32)
+    target_link_libraries(generate_test_data PRIVATE m)
+endif()
+
 # Unit tests
 add_executable(test_filesystem tests/test_filesystem.c filesystem.c)
 target_include_directories(test_filesystem PRIVATE .)
@@ -77,10 +84,57 @@ if(NOT WIN32)
     target_link_libraries(test_types PRIVATE m)
 endif()
 
+add_executable(test_pmd_cubes tests/test_pmd_cubes.c pmd_parser.c psa_parser.c)
+target_include_directories(test_pmd_cubes PRIVATE .)
+if(NOT WIN32)
+    target_link_libraries(test_pmd_cubes PRIVATE m)
+endif()
+
 # Register unit tests
 add_test(NAME unit_filesystem COMMAND test_filesystem)
 add_test(NAME unit_animation COMMAND test_animation)
 add_test(NAME unit_types COMMAND test_types)
+
+# PMD cube integration tests - these require test data to be generated first
+# Generate test data before running tests
+add_test(NAME generate_test_data COMMAND generate_test_data)
+set_tests_properties(generate_test_data PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+add_test(NAME integration_pmd_cubes COMMAND test_pmd_cubes)
+set_tests_properties(integration_pmd_cubes PROPERTIES
+    DEPENDS generate_test_data
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# Integration tests - Convert test cubes to glTF
+add_test(
+    NAME integration_cube_nobones
+    COMMAND $<TARGET_FILE:converter> tests/data/cube_nobones tests/output/cube_nobones.gltf
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+set_tests_properties(integration_cube_nobones PROPERTIES
+    DEPENDS generate_test_data
+)
+
+add_test(
+    NAME integration_cube_4bones
+    COMMAND $<TARGET_FILE:converter> tests/data/cube_4bones tests/output/cube_4bones.gltf
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+set_tests_properties(integration_cube_4bones PROPERTIES
+    DEPENDS generate_test_data
+)
+
+add_test(
+    NAME integration_cube_5bones
+    COMMAND $<TARGET_FILE:converter> tests/data/cube_5bones tests/output/cube_5bones.gltf
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+set_tests_properties(integration_cube_5bones PROPERTIES
+    DEPENDS generate_test_data
+)
 
 # Integration test - Add a simple test if input files exist
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/input/horse.pmd")

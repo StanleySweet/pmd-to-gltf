@@ -1,0 +1,37 @@
+{
+  "asset": {"version": "2.0", "generator": "PMD-PSA-Converter"},
+  "scene": 0,
+  "scenes": [{"nodes": [0]}],
+  "nodes": [
+    {"name": "Armature", "children": [1]},
+    {"mesh": 0, "skin": 0}
+  ],
+  "meshes": [{"name": "cube_nobones", "primitives": [{"attributes": {"POSITION": 0, "NORMAL": 1, "TEXCOORD_0": 2, "JOINTS_0": 3, "WEIGHTS_0": 4}, "indices": 5}]}],
+  "accessors": [
+    {"bufferView": 0, "componentType": 5126, "count": 8, "type": "VEC3"},
+    {"bufferView": 1, "componentType": 5126, "count": 8, "type": "VEC3"},
+    {"bufferView": 2, "componentType": 5126, "count": 8, "type": "VEC2"},
+    {"bufferView": 3, "componentType": 5123, "count": 8, "type": "VEC4"},
+    {"bufferView": 4, "componentType": 5126, "count": 8, "type": "VEC4"},
+    {"bufferView": 5, "componentType": 5123, "count": 36, "type": "SCALAR"},
+    {"bufferView": 6, "componentType": 5126, "count": 0, "type": "MAT4"}
+  ],
+  "bufferViews": [
+    {"buffer": 0, "byteLength": 96},
+    {"buffer": 1, "byteLength": 96},
+    {"buffer": 2, "byteLength": 64},
+    {"buffer": 3, "byteLength": 64},
+    {"buffer": 4, "byteLength": 128},
+    {"buffer": 5, "byteLength": 72},
+    {"buffer": 6, "byteLength": 0}
+  ],
+  "buffers": [
+    {"byteLength": 96, "uri": "data:application/octet-stream;base64,AACAvwAAgL8AAIC/AACAPwAAgL8AAIC/AACAvwAAgD8AAIC/AACAPwAAgD8AAIC/AACAvwAAgL8AAIA/AACAPwAAgL8AAIA/AACAvwAAgD8AAIA/AACAPwAAgD8AAIA/"},
+    {"byteLength": 96, "uri": "data:application/octet-stream;base64,Os0TvzrNE786zRO/Os0TPzrNE786zRO/Os0TvzrNEz86zRO/Os0TPzrNEz86zRO/Os0TvzrNE786zRM/Os0TPzrNE786zRM/Os0TvzrNEz86zRM/Os0TPzrNEz86zRM/"},
+    {"byteLength": 64, "uri": "data:application/octet-stream;base64,AAAAAAAAgD8AAIA/AACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAgD8AAIA/AAAAAAAAAAAAAIA/AAAAAAAA"},
+    {"byteLength": 64, "uri": "data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"},
+    {"byteLength": 128, "uri": "data:application/octet-stream;base64,AACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAA"},
+    {"byteLength": 72, "uri": "data:application/octet-stream;base64,AAABAAMAAAADAAIABAAGAAcABAAHAAUAAAACAAYAAAAGAAQAAQAFAAcAAQAHAAMAAAAEAAUAAAAFAAEAAgADAAcAAgAHAAYA"},
+    {"byteLength": 0, "uri": "data:application/octet-stream;base64,"}
+  ],
+  "skins": [{"skeleton": 0, "inverseBindMatrices": 6, "joints": []}]}
