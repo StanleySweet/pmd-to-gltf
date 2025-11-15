@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<skeleton target="cube_5bones">
+  <bone name="bone_center">
+    <bone name="bone_corner_0"/>
+    <bone name="bone_corner_1"/>
+    <bone name="bone_corner_2"/>
+    <bone name="bone_corner_3"/>
+  </bone>
+</skeleton>
