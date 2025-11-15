@@ -257,13 +257,15 @@ static int test_gltf_json_validity(void) {
         }
         
         if (brace_count != 0) {
-            fprintf(stderr, "File %s has unbalanced braces: %d\n", files[i], brace_count);
+            char msg[256];
+            snprintf(msg, sizeof(msg), "File %s: JSON braces should be balanced (got %d)", files[i], brace_count);
+            TEST_ASSERT_EQ(0, brace_count, msg);
         }
         if (bracket_count != 0) {
-            fprintf(stderr, "File %s has unbalanced brackets: %d\n", files[i], bracket_count);
+            char msg[256];
+            snprintf(msg, sizeof(msg), "File %s: JSON brackets should be balanced (got %d)", files[i], bracket_count);
+            TEST_ASSERT_EQ(0, bracket_count, msg);
         }
-        TEST_ASSERT_EQ(0, brace_count, "JSON braces should be balanced");
-        TEST_ASSERT_EQ(0, bracket_count, "JSON brackets should be balanced");
         
         free(content);
     }
