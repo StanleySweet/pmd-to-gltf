@@ -142,7 +142,15 @@ static void create_cube_bones(PMDModel *model, int numBones) {
     
     model->restStates = calloc(numBones, sizeof(BoneState));
     
-    if (numBones == 4) {
+    if (numBones == 2) {
+        // 2 bones at opposite corners (for prop point test)
+        model->restStates[0].translation = (Vector3D){-1.0f, -1.0f, -1.0f};
+        model->restStates[1].translation = (Vector3D){ 1.0f,  1.0f,  1.0f};
+        
+        for (int i = 0; i < 2; i++) {
+            model->restStates[i].rotation = quat_identity();
+        }
+    } else if (numBones == 4) {
         // 4 bones at the bottom corners of the cube
         model->restStates[0].translation = (Vector3D){-1.0f, -1.0f, -1.0f};
         model->restStates[1].translation = (Vector3D){ 1.0f, -1.0f, -1.0f};
@@ -298,6 +306,33 @@ int main(void) {
         fclose(xml);
     }
     
+    // 7. Cube with 2 bones and 2 prop points (to test prop point handling)
+    printf("Creating cube_2bones_2props.pmd...\n");
+    PMDModel model4 = {0};
+    create_cube_mesh(&model4, 2);
+    create_cube_bones(&model4, 2);
+    
+    // Add 2 prop points
+    model4.numPropPoints = 2;
+    model4.propPoints = calloc(2, sizeof(PropPoint));
+    
+    // Prop point 0: weapon attachment at bone 0
+    model4.propPoints[0].name = strdup("prop_weapon");
+    model4.propPoints[0].translation = (Vector3D){0.5f, 0.0f, 0.0f};
+    model4.propPoints[0].rotation = quat_identity();
+    model4.propPoints[0].bone = 0;
+    
+    // Prop point 1: shield attachment at bone 1
+    model4.propPoints[1].name = strdup("prop_shield");
+    model4.propPoints[1].translation = (Vector3D){-0.5f, 0.0f, 0.0f};
+    model4.propPoints[1].rotation = quat_identity();
+    model4.propPoints[1].bone = 1;
+    
+    if (!write_pmd("tests/data/cube_2bones_2props.pmd", &model4)) {
+        fprintf(stderr, "Failed to write cube_2bones_2props.pmd\n");
+        return 1;
+    }
+    
     printf("Test files generated successfully!\n");
     printf("\nGenerated files:\n");
     printf("  - tests/data/cube_nobones.pmd\n");
@@ -306,6 +341,7 @@ int main(void) {
     printf("  - tests/data/cube_5bones.pmd\n");
     printf("  - tests/data/cube_5bones_anim.psa\n");
     printf("  - tests/data/cube_5bones.xml\n");
+    printf("  - tests/data/cube_2bones_2props.pmd\n");
     
     return 0;
 }

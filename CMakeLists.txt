@@ -154,6 +154,16 @@ set_tests_properties(integration_cube_5bones PROPERTIES
     FIXTURES_SETUP gltf_outputs
 )
 
+add_test(
+    NAME integration_cube_2bones_2props
+    COMMAND $<TARGET_FILE:converter> tests/data/cube_2bones_2props tests/output/cube_2bones_2props.gltf
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+set_tests_properties(integration_cube_2bones_2props PROPERTIES
+    DEPENDS generate_test_data
+    FIXTURES_SETUP gltf_outputs
+)
+
 # Validate glTF output - runs after conversion tests
 add_test(NAME validation_gltf_output COMMAND test_gltf_output)
 set_tests_properties(validation_gltf_output PROPERTIES

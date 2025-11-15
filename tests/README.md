@@ -32,6 +32,7 @@ Les fichiers suivants sont générés automatiquement par `generate_test_data`:
 - `data/cube_5bones.pmd` - Cube avec 5 os (4 coins + 1 centre)
 - `data/cube_5bones_anim.psa` - Animation pour cube_5bones
 - `data/cube_5bones.xml` - Squelette hiérarchique pour cube_5bones
+- `data/cube_2bones_2props.pmd` - Cube avec 2 os et 2 points de prop (pour tester les prop points)
 
 ## Exécution des tests
 
@@ -74,6 +75,7 @@ ctest -R unit_filesystem --output-on-failure
 - **integration_cube_nobones** : Conversion cube sans os vers glTF
 - **integration_cube_4bones** : Conversion cube 4 os + animation vers glTF
 - **integration_cube_5bones** : Conversion cube 5 os hiérarchique + animation vers glTF
+- **integration_cube_2bones_2props** : Conversion cube 2 os + 2 prop points vers glTF (teste le format JSON des joints)
 - **validation_gltf_output** : Validation de la structure et du contenu des fichiers glTF générés
 - **validation_gltf_roundtrip** : Tests aller-retour (round-trip) - décodage base64, validation des positions de vertex, préservation des dimensions
 

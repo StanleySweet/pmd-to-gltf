@@ -187,6 +187,28 @@ static int test_face_validity(void) {
     return 1;
 }
 
+// Test 9: Load cube with 2 bones and 2 prop points
+static int test_load_cube_2bones_2props(void) {
+    PMDModel *model = load_pmd("tests/data/cube_2bones_2props.pmd");
+    TEST_ASSERT_NOT_NULL(model, "Should load cube_2bones_2props.pmd");
+    
+    TEST_ASSERT_EQ(8, model->numVertices, "Should have 8 vertices");
+    TEST_ASSERT_EQ(12, model->numFaces, "Should have 12 faces");
+    TEST_ASSERT_EQ(2, model->numBones, "Should have 2 bones");
+    TEST_ASSERT_EQ(2, model->numPropPoints, "Should have 2 prop points");
+    
+    // Verify prop point names
+    TEST_ASSERT_NOT_NULL(model->propPoints[0].name, "Prop point 0 should have name");
+    TEST_ASSERT_NOT_NULL(model->propPoints[1].name, "Prop point 1 should have name");
+    
+    // Verify prop points are attached to valid bones
+    TEST_ASSERT(model->propPoints[0].bone < model->numBones, "Prop point 0 bone valid");
+    TEST_ASSERT(model->propPoints[1].bone < model->numBones, "Prop point 1 bone valid");
+    
+    free_pmd(model);
+    return 1;
+}
+
 int main(void) {
     const test_case_t tests[] = {
         {"load_cube_nobones", test_load_cube_nobones},
@@ -196,7 +218,8 @@ int main(void) {
         {"load_animation_5bones", test_load_animation_5bones},
         {"cube_dimensions", test_cube_dimensions},
         {"bone_vertex_alignment", test_bone_vertex_alignment},
-        {"face_validity", test_face_validity}
+        {"face_validity", test_face_validity},
+        {"load_cube_2bones_2props", test_load_cube_2bones_2props}
     };
     
     return run_tests(tests, sizeof(tests) / sizeof(tests[0]));
