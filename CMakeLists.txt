@@ -90,6 +90,9 @@ if(NOT WIN32)
     target_link_libraries(test_pmd_cubes PRIVATE m)
 endif()
 
+add_executable(test_gltf_output tests/test_gltf_output.c)
+target_include_directories(test_gltf_output PRIVATE .)
+
 # Register unit tests
 add_test(NAME unit_filesystem COMMAND test_filesystem)
 add_test(NAME unit_animation COMMAND test_animation)
@@ -116,6 +119,7 @@ add_test(
 )
 set_tests_properties(integration_cube_nobones PROPERTIES
     DEPENDS generate_test_data
+    FIXTURES_SETUP gltf_outputs
 )
 
 add_test(
@@ -125,6 +129,7 @@ add_test(
 )
 set_tests_properties(integration_cube_4bones PROPERTIES
     DEPENDS generate_test_data
+    FIXTURES_SETUP gltf_outputs
 )
 
 add_test(
@@ -134,6 +139,14 @@ add_test(
 )
 set_tests_properties(integration_cube_5bones PROPERTIES
     DEPENDS generate_test_data
+    FIXTURES_SETUP gltf_outputs
+)
+
+# Validate glTF output - runs after conversion tests
+add_test(NAME validation_gltf_output COMMAND test_gltf_output)
+set_tests_properties(validation_gltf_output PROPERTIES
+    FIXTURES_REQUIRED gltf_outputs
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 # Integration test - Add a simple test if input files exist

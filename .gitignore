@@ -74,6 +74,9 @@ CMakeUserPresets.json
 output/*.gltf
 output/*.glb
 output/*.bin
+tests/output/*.gltf
+tests/output/*.glb
+tests/output/*.bin
 
 # Temporary files
 *.tmp
