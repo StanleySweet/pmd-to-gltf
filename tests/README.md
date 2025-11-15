@@ -17,6 +17,8 @@ Pour une documentation complète sur la suite de tests, voir [docs/test-suite.md
 - `test_animation.c` - Tests pour l'extraction des noms d'animation
 - `test_types.c` - Tests pour les structures de données (Vector3D, Quaternion, etc.)
 - `test_pmd_cubes.c` - Tests d'intégration pour les cubes de test PMD
+- `test_horse_model.c` - Tests d'intégration pour le modèle du cheval
+- `test_gltf_output.c` - Tests de validation de la sortie glTF
 - `generate_test_data.c` - Générateur de fichiers PMD/PSA de test
 - `run_tests.sh` - Script pour exécuter tous les tests manuellement
 
@@ -64,12 +66,14 @@ ctest -R unit_filesystem --output-on-failure
 - **unit_animation** : Test de l'extraction des noms d'animation à partir des chemins
 - **unit_types** : Test des structures de données et opérations de base
 - **integration_pmd_cubes** : Tests de chargement et validation des cubes PMD de test
+- **integration_horse_model** : Tests de validation du modèle du cheval (206 vertices, 33 bones, 8 prop points)
 
 ### Tests d'intégration  
 - **integration_converter_test** : Test complet de conversion PMD vers glTF (horse)
 - **integration_cube_nobones** : Conversion cube sans os vers glTF
 - **integration_cube_4bones** : Conversion cube 4 os + animation vers glTF
 - **integration_cube_5bones** : Conversion cube 5 os hiérarchique + animation vers glTF
+- **validation_gltf_output** : Validation de la structure et du contenu des fichiers glTF générés
 
 ## Framework de test
 

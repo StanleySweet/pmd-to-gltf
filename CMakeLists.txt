@@ -93,6 +93,12 @@ endif()
 add_executable(test_gltf_output tests/test_gltf_output.c)
 target_include_directories(test_gltf_output PRIVATE .)
 
+add_executable(test_horse_model tests/test_horse_model.c pmd_parser.c psa_parser.c)
+target_include_directories(test_horse_model PRIVATE .)
+if(NOT WIN32)
+    target_link_libraries(test_horse_model PRIVATE m)
+endif()
+
 # Register unit tests
 add_test(NAME unit_filesystem COMMAND test_filesystem)
 add_test(NAME unit_animation COMMAND test_animation)
@@ -151,6 +157,12 @@ set_tests_properties(validation_gltf_output PROPERTIES
 
 # Integration test - Add a simple test if input files exist
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/input/horse.pmd")
+    # Horse model validation tests
+    add_test(NAME integration_horse_model COMMAND test_horse_model)
+    set_tests_properties(integration_horse_model PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    
     add_test(
         NAME integration_converter_test
         COMMAND $<TARGET_FILE:converter> input/horse output/cmake_test.gltf Horse
