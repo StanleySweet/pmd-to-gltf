@@ -122,7 +122,7 @@ static void compute_inverse_bind_matrix(float *ibm, const BoneState *rest_pose) 
 }
 
 void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name) {
-    FILE *f = fopen(output_file, "w");
+    FILE *f = fopen(output_file, "wb");
     if (!f) {
         fprintf(stderr, "Failed to create output file\n");
         return;
