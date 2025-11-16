@@ -91,8 +91,3 @@ tests/output/*.bin
 # Core dumps
 core
 vgcore.*
-
-docs/collada
-docs/pmd2collada
-docs/blender/
-docs/3dsmax-pmd-exp/

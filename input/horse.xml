@@ -1,60 +1,67 @@
 <skeletons>
 	<standard_skeleton title="Horse Biped" id="Horse">
-		<bone name="root">
-			<bone name="pelvis">
-				<bone name="spine">
-					<bone name="spine1">
-						<bone name="neck">
-							<bone name="neck1">
-								<bone name="head"/>
+		<bone name="root"> 
+
+		<bone name="Bip01 Pelvis">
+			<bone name="Bip01 Spine">
+				<bone name="Bip01 Spine1">
+					<bone name="Bip01 Neck">
+						<bone name="Bip01 Neck1">
+							<bone name="Bip01 Head">
+								<bone name="Bip01 HeadNub" />
 							</bone>
-							<bone name="l_clavicle">
-								<bone name="l_upperarm">
-									<bone name="l_forearm">
-										<bone name="l_hand">
-											<bone name="l_finger"/>
-										</bone>
-									</bone>
-								</bone>
-							</bone>
-							<bone name="r_clavicle">
-								<bone name="r_upperarm">
-									<bone name="r_forearm">
-										<bone name="r_hand">
-											<bone name="r_finger"/>
+						</bone>
+						<bone name="Bip01 R Clavicle">
+							<bone name="Bip01 R UpperArm">
+								<bone name="Bip01 R Forearm">
+									<bone name="Bip01 R Hand">
+										<bone name="Bip01 R Finger0">
+											<bone name="Bip01 R Finger0Nub" />
 										</bone>
 									</bone>
 								</bone>
 							</bone>
 						</bone>
-					</bone>
-				</bone>
-				<bone name="l_thigh">
-					<bone name="l_calf">
-						<bone name="l_foot">
-							<bone name="l_toe"/>
-						</bone>
-					</bone>
-				</bone>
-				<bone name="r_thigh">
-					<bone name="r_calf">
-						<bone name="r_foot">
-							<bone name="r_toe">
-								<bone name="r_toe_end"/>
+						<bone name="Bip01 L Clavicle">
+							<bone name="Bip01 L UpperArm">
+								<bone name="Bip01 L Forearm">
+									<bone name="Bip01 L Hand">
+										<bone name="Bip01 L Finger0">
+											<bone name="Bip01 L Finger0Nub" />
+										</bone>
+									</bone>
+								</bone>
 							</bone>
 						</bone>
 					</bone>
 				</bone>
-				<bone name="l_thigh_ik"/>
-				<bone name="l_calf_ik"/>
-				<bone name="l_ankle_ik"/>
-				<bone name="l_toe_ik"/>
-				<bone name="tail">
-					<bone name="tail1">
-						<bone name="tail2"/>
+				<bone name="Bip01 L Thigh">
+					<bone name="Bip01 L Calf">
+						<bone name="Bip01 L Foot">
+							<bone name="Bip01 L Toe0">
+								<bone name="Bip01 L Toe0Nub" />
+							</bone>
+						</bone>
+					</bone>
+				</bone>
+
+				<bone name="Bip01 R Thigh">
+					<bone name="Bip01 R Calf">
+						<bone name="Bip01 R Foot">
+							<bone name="Bip01 R Toe0">
+								<bone name="Bip01 R Toe0Nub" />
+							</bone>
+						</bone>
+					</bone>
+				</bone>
+								<bone name="Bip01 Tail">
+					<bone name="Bip01 Tail1">
+						<bone name="Bip01 TailNub" />
 					</bone>
 				</bone>
 			</bone>
 		</bone>
+		</bone>
+
 	</standard_skeleton>
 </skeletons>
