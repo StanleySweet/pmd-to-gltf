@@ -82,7 +82,7 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
     local->translation = quat_rotate(parent_inv, diff);
 }
 
-void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name) {
+void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name, const float *anim_speed_percent) {
     FILE *f = fopen(output_file, "w");
     if (!f) {
         fprintf(stderr, "Failed to create output file\n");
@@ -237,10 +237,16 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
             uint32_t anim_bones = anim->numBones < model->numBones ? anim->numBones : model->numBones;
             anim_data[a].num_bones = anim_bones;
 
-            // Time samples (30 fps)
+            // Time samples (30 fps) with speed scaling
+            float speed = 100.0f;
+            if (anim_speed_percent) speed = anim_speed_percent[a];
+            if (speed <= 0.0f) speed = 100.0f; // Safeguard
+            // Effective time scaling: higher percent -> faster (time compressed)
+            // percent=200 => half duration => times*(100/200)
+            float scale = 100.0f / speed;
             anim_data[a].times = calloc(anim->numFrames, sizeof(float));
             for (uint32_t i = 0; i < anim->numFrames; i++) {
-                anim_data[a].times[i] = (float)i / 30.0f;
+                anim_data[a].times[i] = ((float)i / 30.0f) * scale;
             }
             anim_data[a].times_size = anim->numFrames * sizeof(float);
             anim_data[a].times_uri = create_data_uri(anim_data[a].times, anim_data[a].times_size);

@@ -30,12 +30,14 @@ set(SOURCES
     gltf_exporter.c
     skeleton.c
     filesystem.c
+    animation_speed_ini.c
 )
 
 set(HEADERS
     pmd_psa_types.h
     skeleton.h
     filesystem.h
+    animation_speed_ini.h
 )
 
 # Create executable

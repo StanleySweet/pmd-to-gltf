@@ -94,3 +94,5 @@ vgcore.*
 
 docs/collada
 docs/pmd2collada
+docs/blender/
+docs/3dsmax-pmd-exp/

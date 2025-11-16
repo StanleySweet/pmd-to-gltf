@@ -1,6 +1,7 @@
 #include "pmd_psa_types.h"
 #include "skeleton.h"
 #include "filesystem.h"
+#include "animation_speed_ini.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,7 +11,7 @@ PMDModel* load_pmd(const char *filename);
 void free_pmd(PMDModel *model);
 PSAAnimation* load_psa(const char *filename);
 void free_psa(PSAAnimation *anim);
-void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name);
+void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name, const float *anim_speed_percent);
 char* get_first_skeleton_id(const char *filename);
 
 
@@ -195,6 +196,24 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Warning: No animations found\n");
     }
 
+    // Load animation speed overrides
+    float *anim_speeds = NULL;
+    if (anim_count > 0) {
+        anim_speeds = calloc(anim_count, sizeof(float));
+        const char **names = calloc(anim_count, sizeof(char*));
+        for (uint32_t i = 0; i < anim_count; i++) {
+            names[i] = anims[i]->name;
+        }
+        AnimationSpeedConfig speed_cfg;
+        if (load_animation_speed_ini(base_name, &speed_cfg, names, anim_count, anim_speeds)) {
+            printf("Animation speeds: default=%.1f%%\n", speed_cfg.default_percent);
+            for (uint32_t i = 0; i < anim_count; i++) {
+                printf("  %s: %.1f%%\n", names[i], anim_speeds[i]);
+            }
+        }
+        free(names);
+    }
+
     printf("Exporting to glTF: %s\n", output_file);
 
     // Extract mesh name from base_name
@@ -202,9 +221,11 @@ int main(int argc, char *argv[]) {
     if (!mesh_name) mesh_name = strrchr(base_name, '\\');
     mesh_name = mesh_name ? mesh_name + 1 : base_name;
 
-    export_gltf(output_file, model, anims, anim_count, skel, mesh_name);
+    export_gltf(output_file, model, anims, anim_count, skel, mesh_name, anim_speeds);
 
     printf("Done! Exported %u animation(s)\n", anim_count);
+
+    free(anim_speeds);
 
     // Cleanup
     if (auto_skeleton_id) {
