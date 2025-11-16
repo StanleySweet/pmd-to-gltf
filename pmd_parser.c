@@ -66,6 +66,12 @@ PMDModel* load_pmd(const char *filename) {
     }
 
     model->version = read_u32(f);
+    
+    // Validation: Check supported version
+    if (model->version < 1 || model->version > 4) {
+        fprintf(stderr, "Warning: Unsupported PMD version %u (expected 1-4)\n", model->version);
+    }
+    
     // Skip data size (not used)
     read_u32(f);
 
@@ -104,6 +110,15 @@ PMDModel* load_pmd(const char *filename) {
 
     // Read bones
     model->numBones = read_u32(f);
+    
+    // Validation: Check bone count limit (254 max according to PMDConvert.cpp)
+    if (model->numBones > 254) {
+        fprintf(stderr, "Error: Too many bones (%u > 254 max)\n", model->numBones);
+        free_pmd(model);
+        fclose(f);
+        return NULL;
+    }
+    
     model->restStates = calloc(model->numBones, sizeof(BoneState));
     for (uint32_t i = 0; i < model->numBones; i++) {
         model->restStates[i].translation = read_vec3(f);
@@ -125,6 +140,12 @@ PMDModel* load_pmd(const char *filename) {
     }
 
     fclose(f);
+    
+    // Debug information matching pmd2collada reference implementation
+    printf("Valid PMDv%u: Verts=%u, Faces=%u, Bones=%u, Props=%u\n", 
+           model->version, model->numVertices, model->numFaces, 
+           model->numBones, model->numPropPoints);
+    
     return model;
 }
 

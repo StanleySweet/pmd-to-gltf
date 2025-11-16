@@ -42,6 +42,7 @@ PSAAnimation* load_psa(const char *filename) {
     }
 
     PSAAnimation *anim = calloc(1, sizeof(PSAAnimation));
+    uint32_t version = 1; // default for error handling
 
     // Read header
     char magic[4];
@@ -53,8 +54,13 @@ PSAAnimation* load_psa(const char *filename) {
         return NULL;
     }
 
-    // Skip version and data size (not used)
-    read_u32(f); // version
+    // Read and validate version
+    version = read_u32(f);
+    if (version != 1) {
+        fprintf(stderr, "Warning: Unsupported PSA version %u (expected 1)\n", version);
+    }
+    
+    // Skip data size (not used)
     read_u32(f); // data_size
 
     // Read name
@@ -68,6 +74,11 @@ PSAAnimation* load_psa(const char *filename) {
     // Read animation data
     anim->numBones = read_u32(f);
     anim->numFrames = read_u32(f);
+    
+    // Validation: Check bone count limit (192 max according to PSAConvert.cpp)
+    if (anim->numBones > 192) {
+        fprintf(stderr, "Warning: Too many bones (%u > 192 max) - skeleton may have issues\n", anim->numBones);
+    }
 
     anim->boneStates = calloc(anim->numBones * anim->numFrames, sizeof(BoneState));
     for (uint32_t i = 0; i < anim->numBones * anim->numFrames; i++) {
@@ -76,6 +87,11 @@ PSAAnimation* load_psa(const char *filename) {
     }
 
     fclose(f);
+    
+    // Debug information matching reference implementations
+    printf("Valid PSAv%u: Bones=%u, Frames=%u, Name='%s'\n", 
+           version, anim->numBones, anim->numFrames, anim->name);
+    
     return anim;
 }
 

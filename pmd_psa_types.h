@@ -67,4 +67,10 @@ typedef struct {
     BoneState *boneStates;  // size: numBones * numFrames
 } PSAAnimation;
 
+// Function declarations
+PMDModel* load_pmd(const char *filename);
+void free_pmd(PMDModel *model);
+PSAAnimation* load_psa(const char *filename);
+void free_psa(PSAAnimation *anim);
+
 #endif

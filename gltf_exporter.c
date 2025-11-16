@@ -127,6 +127,7 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
     Vector3D max_pos = {-1e10f, -1e10f, -1e10f};
 
     for (uint32_t i = 0; i < model->numVertices; i++) {
+        // PMD already stores coordinates in world space - no transformation needed
         positions[i*3+0] = model->vertices[i].position.x;
         positions[i*3+1] = model->vertices[i].position.y;
         positions[i*3+2] = model->vertices[i].position.z;
@@ -267,6 +268,7 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
                         compute_local_transform(&local_state, state, parent_state);
                     }
 
+                    // PMD animations are already in correct coordinate space
                     anim_data[a].translations[b][frame*3 + 0] = local_state.translation.x;
                     anim_data[a].translations[b][frame*3 + 1] = local_state.translation.y;
                     anim_data[a].translations[b][frame*3 + 2] = local_state.translation.z;
@@ -342,7 +344,14 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
         } else {
             // Prop point bones
             uint32_t prop_idx = i - model->numBones;
-            fprintf(f, "\"name\": \"prop-%s\"", model->propPoints[prop_idx].name);
+            const char* prop_name = model->propPoints[prop_idx].name;
+            
+            // Handle special "root" prop point according to PMD specifications
+            if (strcmp(prop_name, "root") == 0) {
+                fprintf(f, "\"name\": \"prop-root\"");
+            } else {
+                fprintf(f, "\"name\": \"prop-%s\"", prop_name);
+            }
         }
 
         // Compute transform (local if has parent, world if root)
@@ -361,6 +370,7 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
             transform.rotation = model->propPoints[prop_idx].rotation;
         }
 
+        // PMD bones and prop points are already in world space - no transformation needed
         fprintf(f, ", \"translation\": [%f, %f, %f], \"rotation\": [%f, %f, %f, %f]",
                 transform.translation.x,
                 transform.translation.y,

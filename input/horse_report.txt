@@ -1,0 +1,29 @@
+PMD Analysis Report: horse.pmd
+==================================================
+
+File: input/horse.pmd
+Magic: PSMD
+Version: 2
+Data size: 13,848 bytes
+
+Geometry:
+  Vertices: 206
+  Faces: 312
+  UV sets: 1
+
+Animation:
+  Bones: 33
+  Prop points: 8
+
+Prop Points:
+  0: 'head' -> bone 6
+  1: 'fl_quarter' -> bone 8
+  2: 'fr_quarter' -> bone 14
+  3: 'chest' -> bone 3
+  4: 'rider' -> bone 2
+  5: 'saddle' -> bone 2
+  6: 'rl_quarter' -> bone 1
+  7: 'rr_quarter' -> bone 1
+
+Export Results:
+  COLLADA: horse.dae (41,202 bytes)
