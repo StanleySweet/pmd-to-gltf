@@ -11,7 +11,7 @@ PMDModel* load_pmd(const char *filename);
 void free_pmd(PMDModel *model);
 PSAAnimation* load_psa(const char *filename);
 void free_psa(PSAAnimation *anim);
-void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name, const float *anim_speed_percent);
+void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name, const float *anim_speed_percent, const char *rest_pose_anim);
 char* get_first_skeleton_id(const char *filename);
 
 
@@ -60,16 +60,26 @@ int main(int argc, char *argv[]) {
     }
 
     const char *base_name = argv[1];
-    
-    // Always auto-detect skeleton ID from XML file
+
+    // Option flags
+    int print_bones = 0;
+    const char *rest_pose_anim = NULL;
+    // Only positional args before any --option are used for skeleton detection
+    int first_option = 2;
+    for (int i = 2; i < argc; ++i) {
+        if (argv[i][0] == '-') { first_option = i; break; }
+    }
+    for (int i = first_option; i < argc; ++i) {
+        if (strcmp(argv[i], "--print-bones") == 0) print_bones = 1;
+        if (strcmp(argv[i], "--rest-pose") == 0 && i+1 < argc) {
+            rest_pose_anim = argv[i+1];
+            i++;
+        }
+    }
+
+    // Always auto-detect skeleton ID from XML file using base_name only
     char *auto_skeleton_id = NULL;
     const char *skeleton_id = NULL;
-
-    // Check for --print-bones option
-    int print_bones = 0;
-    for (int i = 2; i < argc; ++i) {
-        if (strcmp(argv[i], "--print-bones") == 0) print_bones = 1;
-    }
 
     // Build filenames from base name
     char pmd_file[512];
@@ -77,7 +87,7 @@ int main(int argc, char *argv[]) {
     char output_file[512];
     snprintf(pmd_file, sizeof(pmd_file), "%s.pmd", base_name);
     snprintf(skeleton_file, sizeof(skeleton_file), "%s.xml", base_name);
-    
+
     // Extract just the base filename for output
     const char *output_basename = strrchr(base_name, '/');
     if (!output_basename) output_basename = strrchr(base_name, '\\');
@@ -125,6 +135,10 @@ int main(int argc, char *argv[]) {
         printf("No skeleton XML file found - proceeding without skeleton names\n");
         skeleton_id = NULL; // Will proceed without skeleton
     }
+    // Debug: print which animation is used for rest pose
+    if (rest_pose_anim) {
+        printf("Retargeting rest pose to animation: %s (frame 0)\n", rest_pose_anim);
+    }
 
     // Load skeleton hierarchy
     SkeletonDef *skel = NULL;
@@ -160,14 +174,14 @@ int main(int argc, char *argv[]) {
 
     // Extract just the base filename for pattern matching
     const char *base_filename = dir_end ? dir_end + 1 : base_name;
-    
+
     // Create pattern for PSA files
     char psa_pattern[256];
     snprintf(psa_pattern, sizeof(psa_pattern), "%s_*.psa", base_filename);
-    
+
     // Find all matching PSA files
     FileList *psa_files = find_files(dir, psa_pattern);
-    
+
     if (psa_files && psa_files->count > 0) {
         for (uint32_t i = 0; i < psa_files->count; i++) {
             PSAAnimation *anim = load_psa(psa_files->paths[i]);
@@ -187,7 +201,7 @@ int main(int argc, char *argv[]) {
             }
         }
     }
-    
+
     if (psa_files) {
         free_file_list(psa_files);
     }
@@ -221,7 +235,7 @@ int main(int argc, char *argv[]) {
     if (!mesh_name) mesh_name = strrchr(base_name, '\\');
     mesh_name = mesh_name ? mesh_name + 1 : base_name;
 
-    export_gltf(output_file, model, anims, anim_count, skel, mesh_name, anim_speeds);
+    export_gltf(output_file, model, anims, anim_count, skel, mesh_name, anim_speeds, rest_pose_anim);
 
     printf("Done! Exported %u animation(s)\n", anim_count);
 

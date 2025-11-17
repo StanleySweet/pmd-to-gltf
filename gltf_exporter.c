@@ -1,3 +1,41 @@
+#include <math.h>
+
+#include "pmd_psa_types.h"
+
+// Helper: build matrix from BoneState
+void make_matrix(const BoneState *bs, float *out) {
+    float x = bs->rotation.x, y = bs->rotation.y, z = bs->rotation.z, w = bs->rotation.w;
+    float xx = x*x, yy = y*y, zz = z*z;
+    float xy = x*y, xz = x*z, yz = y*z;
+    float wx = w*x, wy = w*y, wz = w*z;
+    out[0] = 1.0f - 2.0f*(yy + zz);
+    out[1] = 2.0f*(xy + wz);
+    out[2] = 2.0f*(xz - wy);
+    out[3] = 0.0f;
+    out[4] = 2.0f*(xy - wz);
+    out[5] = 1.0f - 2.0f*(xx + zz);
+    out[6] = 2.0f*(yz + wx);
+    out[7] = 0.0f;
+    out[8] = 2.0f*(xz + wy);
+    out[9] = 2.0f*(yz - wx);
+    out[10] = 1.0f - 2.0f*(xx + yy);
+    out[11] = 0.0f;
+    out[12] = bs->translation.x;
+    out[13] = bs->translation.y;
+    out[14] = bs->translation.z;
+    out[15] = 1.0f;
+}
+
+void invert_affine(const float *m, float *out) {
+    out[0]=m[0]; out[1]=m[4]; out[2]=m[8];  out[3]=0.0f;
+    out[4]=m[1]; out[5]=m[5]; out[6]=m[9];  out[7]=0.0f;
+    out[8]=m[2]; out[9]=m[6]; out[10]=m[10]; out[11]=0.0f;
+    float tx = m[12], ty = m[13], tz = m[14];
+    out[12] = -(out[0]*tx + out[4]*ty + out[8]*tz);
+    out[13] = -(out[1]*tx + out[5]*ty + out[9]*tz);
+    out[14] = -(out[2]*tx + out[6]*ty + out[10]*tz);
+    out[15] = 1.0f;
+}
 #include "pmd_psa_types.h"
 #include "skeleton.h"
 #include <stdio.h>
@@ -82,7 +120,7 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
     local->translation = quat_rotate(parent_inv, diff);
 }
 
-void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name, const float *anim_speed_percent) {
+void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name, const float *anim_speed_percent, const char *rest_pose_anim) {
     FILE *f = fopen(output_file, "w");
     if (!f) {
         fprintf(stderr, "Failed to create output file\n");
@@ -197,19 +235,50 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
         indices[i*3+2] = model->faces[i].vertices[2];
     }
 
-    // Compute inverse bind matrices from rest pose
-    // Vertices are in world space matching rest pose, so use identity matrices
-    // IBMs for skeleton bones + prop points (prop points also get identity since they don't deform)
+    // Compute inverse bind matrices and node transforms from rest pose or specified animation frame 0
     uint32_t total_ibm_count = skinnable_bones + model->numPropPoints;
     size_t ibm_size = total_ibm_count * 16 * sizeof(float);
     float *ibm = calloc(total_ibm_count * 16, sizeof(float));
-    for (uint32_t i = 0; i < total_ibm_count; i++) {
-        uint32_t idx = i * 16;
-        // Identity matrix in column-major order
-        ibm[idx + 0] = 1.0f; ibm[idx + 4] = 0.0f; ibm[idx + 8]  = 0.0f; ibm[idx + 12] = 0.0f;
-        ibm[idx + 1] = 0.0f; ibm[idx + 5] = 1.0f; ibm[idx + 9]  = 0.0f; ibm[idx + 13] = 0.0f;
-        ibm[idx + 2] = 0.0f; ibm[idx + 6] = 0.0f; ibm[idx + 10] = 1.0f; ibm[idx + 14] = 0.0f;
-        ibm[idx + 3] = 0.0f; ibm[idx + 7] = 0.0f; ibm[idx + 11] = 0.0f; ibm[idx + 15] = 1.0f;
+    PSAAnimation *bind_anim = NULL;
+    if (rest_pose_anim && anims && anim_count > 0) {
+        for (uint32_t a = 0; a < anim_count; ++a) {
+            if (anims[a] && anims[a]->name && strcmp(anims[a]->name, rest_pose_anim) == 0) {
+                bind_anim = anims[a];
+                break;
+            }
+        }
+    }
+    // For each skinnable bone, use frame 0 of bind_anim if set, else restStates
+    for (uint32_t i = 0; i < skinnable_bones; ++i) {
+        uint32_t boneIndex = i + 1;
+        BoneState world_bs;
+        int haveWorld = 0;
+        if (bind_anim && boneIndex < bind_anim->numBones && bind_anim->numFrames > 0) {
+            world_bs = bind_anim->boneStates[0 * bind_anim->numBones + boneIndex];
+            haveWorld = 1;
+        } else if (boneIndex < model->numBones) {
+            world_bs = model->restStates[boneIndex];
+            haveWorld = 1;
+        }
+        if (!haveWorld) {
+            uint32_t idx = i*16;
+            ibm[idx+0]=1; ibm[idx+4]=0; ibm[idx+8]=0; ibm[idx+12]=0;
+            ibm[idx+1]=0; ibm[idx+5]=1; ibm[idx+9]=0; ibm[idx+13]=0;
+            ibm[idx+2]=0; ibm[idx+6]=0; ibm[idx+10]=1; ibm[idx+14]=0;
+            ibm[idx+3]=0; ibm[idx+7]=0; ibm[idx+11]=0; ibm[idx+15]=1;
+            continue;
+        }
+        float mTemp[16];
+        make_matrix(&world_bs, mTemp);
+        invert_affine(mTemp, &ibm[i*16]);
+    }
+    // Prop points: keep identity
+    for (uint32_t p = 0; p < model->numPropPoints; ++p) {
+        uint32_t idx = (skinnable_bones + p)*16;
+        ibm[idx+0]=1; ibm[idx+4]=0; ibm[idx+8]=0; ibm[idx+12]=0;
+        ibm[idx+1]=0; ibm[idx+5]=1; ibm[idx+9]=0; ibm[idx+13]=0;
+        ibm[idx+2]=0; ibm[idx+6]=0; ibm[idx+10]=1; ibm[idx+14]=0;
+        ibm[idx+3]=0; ibm[idx+7]=0; ibm[idx+11]=0; ibm[idx+15]=1;
     }
 
     // Prepare animation data for ALL animations
@@ -351,7 +420,7 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
             // Prop point bones
             uint32_t prop_idx = i - model->numBones;
             const char* prop_name = model->propPoints[prop_idx].name;
-            
+
             // Handle special "root" prop point according to PMD specifications
             if (strcmp(prop_name, "root") == 0) {
                 fprintf(f, "\"name\": \"prop-root\"");
@@ -360,20 +429,32 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
             }
         }
 
-        // Compute transform (local if has parent, world if root)
+        // Compute transform from rest pose or specified animation frame 0
         BoneState transform;
         if (i < model->numBones) {
-            // Regular skeleton bone
-            transform = model->restStates[i];
+            BoneState worldPose = model->restStates[i];
+            if (bind_anim && i < bind_anim->numBones && bind_anim->numFrames > 0) {
+                worldPose = bind_anim->boneStates[0 * bind_anim->numBones + i];
+            }
+            transform = worldPose;
             if (skel && i < (uint32_t)skel->bone_count && skel->bones[i].parent_index != -1) {
                 int parent_idx = skel->bones[i].parent_index;
-                compute_local_transform(&transform, &model->restStates[i], &model->restStates[parent_idx]);
+                BoneState parentWorld = model->restStates[parent_idx];
+                if (bind_anim && parent_idx < bind_anim->numBones && bind_anim->numFrames > 0) {
+                    parentWorld = bind_anim->boneStates[0 * bind_anim->numBones + parent_idx];
+                }
+                compute_local_transform(&transform, &worldPose, &parentWorld);
             }
         } else {
-            // Prop point - use local offset from propPoints
-            uint32_t prop_idx = i - model->numBones;
-            transform.translation = model->propPoints[prop_idx].translation;
-            transform.rotation = model->propPoints[prop_idx].rotation;
+                uint32_t prop_idx = i - model->numBones;
+                // Retarget prop points for rest pose animation if available
+                if (bind_anim && prop_idx < bind_anim->numPropPoints && bind_anim->numFrames > 0 && bind_anim->propStates) {
+                    // Use frame 0 of rest pose animation for prop point
+                    transform = bind_anim->propStates[0 * bind_anim->numPropPoints + prop_idx];
+                } else {
+                    transform.translation = model->propPoints[prop_idx].translation;
+                    transform.rotation = model->propPoints[prop_idx].rotation;
+                }
         }
 
         // PMD bones and prop points are already in world space - no transformation needed
