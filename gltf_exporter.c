@@ -1,6 +1,16 @@
 #include <math.h>
 
 #include "pmd_psa_types.h"
+#include "skeleton.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+
+// ...existing code...
+#include <math.h>
+
+#include "pmd_psa_types.h"
 
 // Helper: build matrix from BoneState
 void make_matrix(const BoneState *bs, float *out) {
@@ -121,6 +131,15 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
 }
 
 void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name, const float *anim_speed_percent, const char *rest_pose_anim) {
+        PSAAnimation *bind_anim = NULL;
+        if (rest_pose_anim && anims && anim_count > 0) {
+            for (uint32_t a = 0; a < anim_count; ++a) {
+                if (anims[a] && anims[a]->name && strcmp(anims[a]->name, rest_pose_anim) == 0) {
+                    bind_anim = anims[a];
+                    break;
+                }
+            }
+        }
     FILE *f = fopen(output_file, "w");
     if (!f) {
         fprintf(stderr, "Failed to create output file\n");
@@ -164,23 +183,66 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
     Vector3D min_pos = {1e10f, 1e10f, 1e10f};
     Vector3D max_pos = {-1e10f, -1e10f, -1e10f};
 
+
     for (uint32_t i = 0; i < model->numVertices; i++) {
-        // PMD already stores coordinates in world space - no transformation needed
-        positions[i*3+0] = model->vertices[i].position.x;
-        positions[i*3+1] = model->vertices[i].position.y;
-        positions[i*3+2] = model->vertices[i].position.z;
+        Vector3D pos = model->vertices[i].position;
+        Vector3D norm = model->vertices[i].normal;
+
+        // If rest pose animation is specified, adapt mesh to new rest pose
+        if (bind_anim && bind_anim->numFrames > 0) {
+            Vector3D new_pos = {0,0,0};
+            Vector3D new_norm = {0,0,0};
+            float total_weight = 0.0f;
+            for (int j = 0; j < 4; j++) {
+                uint8_t bone_idx = model->vertices[i].blend.bones[j];
+                float weight = model->vertices[i].blend.weights[j];
+                if (bone_idx != 0xFF && bone_idx < bind_anim->numBones && weight > 0.0f) {
+                    // Get transform from frame 0 of rest pose animation
+                    BoneState bs = bind_anim->boneStates[0 * bind_anim->numBones + bone_idx];
+                    // Apply rotation
+                    Vector3D rotated = quat_rotate(bs.rotation, pos);
+                    // Apply translation
+                    rotated.x += bs.translation.x;
+                    rotated.y += bs.translation.y;
+                    rotated.z += bs.translation.z;
+                    new_pos.x += rotated.x * weight;
+                    new_pos.y += rotated.y * weight;
+                    new_pos.z += rotated.z * weight;
+                    // Normals: rotate only
+                    Vector3D nrm_rot = quat_rotate(bs.rotation, norm);
+                    new_norm.x += nrm_rot.x * weight;
+                    new_norm.y += nrm_rot.y * weight;
+                    new_norm.z += nrm_rot.z * weight;
+                    total_weight += weight;
+                }
+            }
+            if (total_weight > 0.0f) {
+                new_pos.x /= total_weight;
+                new_pos.y /= total_weight;
+                new_pos.z /= total_weight;
+                new_norm.x /= total_weight;
+                new_norm.y /= total_weight;
+                new_norm.z /= total_weight;
+                pos = new_pos;
+                norm = new_norm;
+            }
+        }
+
+        positions[i*3+0] = pos.x;
+        positions[i*3+1] = pos.y;
+        positions[i*3+2] = pos.z;
 
         // Track bounds
-        if (model->vertices[i].position.x < min_pos.x) min_pos.x = model->vertices[i].position.x;
-        if (model->vertices[i].position.y < min_pos.y) min_pos.y = model->vertices[i].position.y;
-        if (model->vertices[i].position.z < min_pos.z) min_pos.z = model->vertices[i].position.z;
-        if (model->vertices[i].position.x > max_pos.x) max_pos.x = model->vertices[i].position.x;
-        if (model->vertices[i].position.y > max_pos.y) max_pos.y = model->vertices[i].position.y;
-        if (model->vertices[i].position.z > max_pos.z) max_pos.z = model->vertices[i].position.z;
+        if (pos.x < min_pos.x) min_pos.x = pos.x;
+        if (pos.y < min_pos.y) min_pos.y = pos.y;
+        if (pos.z < min_pos.z) min_pos.z = pos.z;
+        if (pos.x > max_pos.x) max_pos.x = pos.x;
+        if (pos.y > max_pos.y) max_pos.y = pos.y;
+        if (pos.z > max_pos.z) max_pos.z = pos.z;
 
-        normals[i*3+0] = model->vertices[i].normal.x;
-        normals[i*3+1] = model->vertices[i].normal.y;
-        normals[i*3+2] = model->vertices[i].normal.z;
+        normals[i*3+0] = norm.x;
+        normals[i*3+1] = norm.y;
+        normals[i*3+2] = norm.z;
 
         // glTF expects V origin at top; source data appears upside-down -> flip V
         texcoords[i*2+0] = model->vertices[i].coords[0].u;
@@ -239,15 +301,6 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
     uint32_t total_ibm_count = skinnable_bones + model->numPropPoints;
     size_t ibm_size = total_ibm_count * 16 * sizeof(float);
     float *ibm = calloc(total_ibm_count * 16, sizeof(float));
-    PSAAnimation *bind_anim = NULL;
-    if (rest_pose_anim && anims && anim_count > 0) {
-        for (uint32_t a = 0; a < anim_count; ++a) {
-            if (anims[a] && anims[a]->name && strcmp(anims[a]->name, rest_pose_anim) == 0) {
-                bind_anim = anims[a];
-                break;
-            }
-        }
-    }
     // For each skinnable bone, use frame 0 of bind_anim if set, else restStates
     for (uint32_t i = 0; i < skinnable_bones; ++i) {
         uint32_t boneIndex = i + 1;
@@ -446,15 +499,9 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
                 compute_local_transform(&transform, &worldPose, &parentWorld);
             }
         } else {
-                uint32_t prop_idx = i - model->numBones;
-                // Retarget prop points for rest pose animation if available
-                if (bind_anim && prop_idx < bind_anim->numPropPoints && bind_anim->numFrames > 0 && bind_anim->propStates) {
-                    // Use frame 0 of rest pose animation for prop point
-                    transform = bind_anim->propStates[0 * bind_anim->numPropPoints + prop_idx];
-                } else {
-                    transform.translation = model->propPoints[prop_idx].translation;
-                    transform.rotation = model->propPoints[prop_idx].rotation;
-                }
+            uint32_t prop_idx = i - model->numBones;
+            transform.translation = model->propPoints[prop_idx].translation;
+            transform.rotation = model->propPoints[prop_idx].rotation;
         }
 
         // PMD bones and prop points are already in world space - no transformation needed
