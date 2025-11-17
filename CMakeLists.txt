@@ -24,20 +24,20 @@ endif()
 
 # Source files
 set(SOURCES
-    main.c
-    pmd_parser.c
-    psa_parser.c
-    gltf_exporter.c
-    skeleton.c
-    filesystem.c
-    animation_speed_ini.c
+    src/main.c
+    src/pmd_parser.c
+    src/psa_parser.c
+    src/gltf_exporter.c
+    src/skeleton.c
+    src/filesystem.c
+    src/animation_speed_ini.c
 )
 
 set(HEADERS
-    pmd_psa_types.h
-    skeleton.h
-    filesystem.h
-    animation_speed_ini.h
+    src/pmd_psa_types.h
+    src/skeleton.h
+    src/filesystem.h
+    src/animation_speed_ini.h
 )
 
 # Create executable
@@ -64,45 +64,45 @@ install(TARGETS converter
 enable_testing()
 
 # Test data generator
-add_executable(generate_test_data tests/generate_test_data.c pmd_writer.c)
-target_include_directories(generate_test_data PRIVATE .)
+add_executable(generate_test_data tests/generate_test_data.c src/pmd_writer.c)
+target_include_directories(generate_test_data PRIVATE src)
 if(NOT WIN32)
     target_link_libraries(generate_test_data PRIVATE m)
 endif()
 
 # Unit tests
-add_executable(test_filesystem tests/test_filesystem.c filesystem.c)
-target_include_directories(test_filesystem PRIVATE .)
+add_executable(test_filesystem tests/test_filesystem.c src/filesystem.c)
+target_include_directories(test_filesystem PRIVATE src)
 if(NOT WIN32)
     target_link_libraries(test_filesystem PRIVATE m)
 endif()
 
 add_executable(test_animation tests/test_animation.c)
-target_include_directories(test_animation PRIVATE .)
+target_include_directories(test_animation PRIVATE src)
 
 add_executable(test_types tests/test_types.c)
-target_include_directories(test_types PRIVATE .)
+target_include_directories(test_types PRIVATE src)
 if(NOT WIN32)
     target_link_libraries(test_types PRIVATE m)
 endif()
 
-add_executable(test_pmd_cubes tests/test_pmd_cubes.c pmd_parser.c psa_parser.c)
-target_include_directories(test_pmd_cubes PRIVATE .)
+add_executable(test_pmd_cubes tests/test_pmd_cubes.c src/pmd_parser.c src/psa_parser.c)
+target_include_directories(test_pmd_cubes PRIVATE src)
 if(NOT WIN32)
     target_link_libraries(test_pmd_cubes PRIVATE m)
 endif()
 
 add_executable(test_gltf_output tests/test_gltf_output.c)
-target_include_directories(test_gltf_output PRIVATE .)
+target_include_directories(test_gltf_output PRIVATE src)
 
-add_executable(test_horse_model tests/test_horse_model.c pmd_parser.c psa_parser.c)
-target_include_directories(test_horse_model PRIVATE .)
+add_executable(test_horse_model tests/test_horse_model.c src/pmd_parser.c src/psa_parser.c)
+target_include_directories(test_horse_model PRIVATE src)
 if(NOT WIN32)
     target_link_libraries(test_horse_model PRIVATE m)
 endif()
 
-add_executable(test_gltf_roundtrip tests/test_gltf_roundtrip.c pmd_parser.c)
-target_include_directories(test_gltf_roundtrip PRIVATE .)
+add_executable(test_gltf_roundtrip tests/test_gltf_roundtrip.c src/pmd_parser.c)
+target_include_directories(test_gltf_roundtrip PRIVATE src)
 if(NOT WIN32)
     target_link_libraries(test_gltf_roundtrip PRIVATE m)
 endif()

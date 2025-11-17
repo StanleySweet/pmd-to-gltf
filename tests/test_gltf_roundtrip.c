@@ -1,5 +1,5 @@
 #include "test_framework.h"
-#include "../pmd_psa_types.h"
+#include "pmd_psa_types.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
