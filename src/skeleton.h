@@ -14,10 +14,13 @@ typedef struct {
 typedef struct {
     int bone_count;
     BoneInfo bones[MAX_BONES];
+    char skeleton_file[256];
+    char skeleton_id[64];
+    char title[128];
 } SkeletonDef;
 
-// Parse skeleton XML and return bone hierarchy
-SkeletonDef* load_skeleton_xml(const char *filename, const char *skeleton_id);
+// Parse skeleton JSON and return bone hierarchy
+SkeletonDef* load_skeleton_json(const char *filename);
 // Extract the first skeleton ID from XML file
 char* get_first_skeleton_id(const char *filename);
 void free_skeleton(SkeletonDef *skel);

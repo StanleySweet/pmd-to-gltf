@@ -1,8 +1,79 @@
+// Tous les includes en haut
 #include "skeleton.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include "cJSON.h"
+
+SkeletonDef* load_skeleton_json(const char *filename) {
+    FILE *f = fopen(filename, "r");
+    if (!f) {
+        fprintf(stderr, "Failed to open skeleton JSON file: %s\n", filename);
+        return NULL;
+    }
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    char *content = malloc((size_t)size + 1);
+    fread(content, 1, (size_t)size, f);
+    content[size] = '\0';
+    fclose(f);
+
+    cJSON *root = cJSON_Parse(content);
+    free(content);
+    if (!root) {
+        fprintf(stderr, "Invalid JSON in skeleton config\n");
+        return NULL;
+    }
+
+    cJSON *skel_obj = cJSON_GetObjectItem(root, "skeleton");
+    if (!skel_obj) {
+        cJSON_Delete(root);
+        fprintf(stderr, "No 'skeleton' object in JSON\n");
+        return NULL;
+    }
+
+    SkeletonDef *skel = calloc(1, sizeof(SkeletonDef));
+    strncpy(skel->skeleton_file, filename, sizeof(skel->skeleton_file)-1);
+    skel->skeleton_file[sizeof(skel->skeleton_file)-1] = '\0';
+    skel->skeleton_id[0] = '\0';
+
+    cJSON *title = cJSON_GetObjectItem(skel_obj, "title");
+    if (title && cJSON_IsString(title)) {
+        strncpy(skel->title, title->valuestring, sizeof(skel->title)-1);
+        skel->title[sizeof(skel->title)-1] = '\0';
+    } else {
+        skel->title[0] = '\0';
+    }
+
+    cJSON *bones = cJSON_GetObjectItem(skel_obj, "bones");
+    if (bones && cJSON_IsArray(bones)) {
+        int count = cJSON_GetArraySize(bones);
+        skel->bone_count = count > MAX_BONES ? MAX_BONES : count;
+        for (int i = 0; i < skel->bone_count; i++) {
+            cJSON *bone = cJSON_GetArrayItem(bones, i);
+            cJSON *name = cJSON_GetObjectItem(bone, "name");
+            cJSON *parent = cJSON_GetObjectItem(bone, "parent_index");
+            if (name && cJSON_IsString(name)) {
+                strncpy(skel->bones[i].name, name->valuestring, sizeof(skel->bones[i].name)-1);
+                skel->bones[i].name[sizeof(skel->bones[i].name)-1] = '\0';
+            } else {
+                skel->bones[i].name[0] = '\0';
+            }
+            skel->bones[i].parent_index = parent && cJSON_IsNumber(parent) ? parent->valueint : -1;
+        }
+    }
+
+    cJSON_Delete(root);
+    return skel;
+}
+#include "skeleton.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include "cJSON.h"
 
 // Simple XML parser for skeleton hierarchy
 // Parses the bone names and builds parent-child relationships
@@ -127,6 +198,11 @@ SkeletonDef* load_skeleton_xml(const char *filename, const char *skeleton_id) {
     }
 
     SkeletonDef *skel = calloc(1, sizeof(SkeletonDef));
+    strncpy(skel->skeleton_file, filename, sizeof(skel->skeleton_file)-1);
+    skel->skeleton_file[sizeof(skel->skeleton_file)-1] = '\0';
+    strncpy(skel->skeleton_id, skeleton_id, sizeof(skel->skeleton_id)-1);
+    skel->skeleton_id[sizeof(skel->skeleton_id)-1] = '\0';
+    skel->title[0] = '\0'; // Initialisation du champ title
     const char *p = skel_start;
 
     // Parse bone hierarchy

@@ -1,17 +1,17 @@
 #include "pmd_psa_types.h"
 #include "skeleton.h"
 #include "filesystem.h"
-#include "animation_speed_ini.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "cJSON.h"
 
 // Function declarations from other modules
 PMDModel* load_pmd(const char *filename);
 void free_pmd(PMDModel *model);
 PSAAnimation* load_psa(const char *filename);
 void free_psa(PSAAnimation *anim);
-void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name, const float *anim_speed_percent, const char *rest_pose_anim);
+int export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name, const float *anim_speed_percent, const char *rest_pose_anim);
 char* get_first_skeleton_id(const char *filename);
 
 
@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
 
     if (argc < 2) {
         printf("Usage: %s <base_name> [--print-bones]\n", argv[0]);
-        printf("  Loads: <base_name>.pmd, <base_name>.xml, <base_name>_*.psa\n");
+        printf("  Loads: <base_name>.pmd, <base_name>.json, <base_name>_*.psa\n");
         printf("  Outputs: output/<filename>.gltf\n");
         printf("  Example: %s input/model\n", argv[0]);
         printf("  Option: --print-bones to print all bone transforms and exit.\n");
@@ -77,18 +77,13 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // Always auto-detect skeleton ID from XML file using base_name only
-    char *auto_skeleton_id = NULL;
-    const char *skeleton_id = NULL;
-
-    // Build filenames from base name
+    // Utilisation du JSON pour squelette et vitesses anims
     char pmd_file[512];
-    char skeleton_file[512];
+    char skeleton_json_file[512];
     char output_file[512];
     snprintf(pmd_file, sizeof(pmd_file), "%s.pmd", base_name);
-    snprintf(skeleton_file, sizeof(skeleton_file), "%s.xml", base_name);
+    snprintf(skeleton_json_file, sizeof(skeleton_json_file), "%s_config.json", base_name);
 
-    // Extract just the base filename for output
     const char *output_basename = strrchr(base_name, '/');
     if (!output_basename) output_basename = strrchr(base_name, '\\');
     output_basename = output_basename ? output_basename + 1 : base_name;
@@ -102,12 +97,8 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    printf("  Vertices: %u, Faces: %u, Bones: %u\n",
-           model->numVertices, model->numFaces, model->numBones);
-
-    if (model->numPropPoints > 0) {
-        printf("  Prop points: %u\n", model->numPropPoints);
-    }
+    printf("  PMD v%u: Vertices=%u, Faces=%u, Bones=%u, Props=%u\n",
+           model->version, model->numVertices, model->numFaces, model->numBones, model->numPropPoints);
 
     if (print_bones) {
         printf("All bone transforms (rest pose):\n");
@@ -126,35 +117,17 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
-    // Auto-detect skeleton ID from XML file if it exists
-    auto_skeleton_id = get_first_skeleton_id(skeleton_file);
-    if (auto_skeleton_id) {
-        skeleton_id = auto_skeleton_id;
-        printf("Auto-detected skeleton ID: %s\n", skeleton_id);
-    } else {
-        printf("No skeleton XML file found - proceeding without skeleton names\n");
-        skeleton_id = NULL; // Will proceed without skeleton
-    }
-    // Debug: print which animation is used for rest pose
-    if (rest_pose_anim) {
-        printf("Retargeting rest pose to animation: %s (frame 0)\n", rest_pose_anim);
-    }
-
-    // Load skeleton hierarchy
-    SkeletonDef *skel = NULL;
-    if (skeleton_id) {
-        printf("Loading skeleton: %s (id: %s)\n", skeleton_file, skeleton_id);
-        skel = load_skeleton_xml(skeleton_file, skeleton_id);
-        if (skel) {
-            printf("  Loaded %d bones\n", skel->bone_count);
-            if (model->numBones > (uint32_t)skel->bone_count) {
-                printf("  Note: %u extra bones\n", model->numBones - skel->bone_count);
-            }
+    // Charger le squelette depuis le JSON
+    SkeletonDef *skel = load_skeleton_json(skeleton_json_file);
+    if (skel) {
+        printf("Skeleton: %s\n", skel->title);
+        printf("  Loaded %d bones\n", skel->bone_count);
+        if (model->numBones > (uint32_t)skel->bone_count) {
+            printf("  Note: %u extra bones\n", model->numBones - skel->bone_count);
         }
     }
 
     // Find and load all matching PSA files
-    printf("Loading animations: %s_*.psa\n", base_name);
     PSAAnimation **anims = NULL;
     uint32_t anim_count = 0;
     uint32_t anim_capacity = 10;
@@ -172,8 +145,12 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    snprintf(skeleton_json_file, sizeof(skeleton_json_file), "%s.json", base_name);
+
     // Extract just the base filename for pattern matching
     const char *base_filename = dir_end ? dir_end + 1 : base_name;
+    
+    printf("Loading animations: %s_*.psa\n", base_filename);
 
     // Create pattern for PSA files
     char psa_pattern[256];
@@ -190,14 +167,17 @@ int main(int argc, char *argv[]) {
                 if (anim_name) {
                     free(anim->name);
                     anim->name = anim_name;
+                } else {
+                    // If we couldn't extract a name, warn about legacy "God Knows"
+                    if (anim->name && strcmp(anim->name, "God Knows") == 0) {
+                        fprintf(stderr, "Warning: Animation file '%s' has legacy 'God Knows' placeholder name.\n", psa_files->paths[i]);
+                    }
                 }
-
                 if (anim_count >= anim_capacity) {
                     anim_capacity *= 2;
                     anims = realloc(anims, anim_capacity * sizeof(PSAAnimation*));
                 }
                 anims[anim_count++] = anim;
-                printf("  Loaded: %s (%u frames)\n", anim->name, anim->numFrames);
             }
         }
     }
@@ -210,22 +190,42 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Warning: No animations found\n");
     }
 
-    // Load animation speed overrides
+    // Charger les vitesses d'animation depuis le JSON
     float *anim_speeds = NULL;
     if (anim_count > 0) {
         anim_speeds = calloc(anim_count, sizeof(float));
-        const char **names = calloc(anim_count, sizeof(char*));
-        for (uint32_t i = 0; i < anim_count; i++) {
-            names[i] = anims[i]->name;
-        }
-        AnimationSpeedConfig speed_cfg;
-        if (load_animation_speed_ini(base_name, &speed_cfg, names, anim_count, anim_speeds)) {
-            printf("Animation speeds: default=%.1f%%\n", speed_cfg.default_percent);
-            for (uint32_t i = 0; i < anim_count; i++) {
-                printf("  %s: %.1f%%\n", names[i], anim_speeds[i]);
+        FILE *f = fopen(skeleton_json_file, "r");
+        if (f) {
+            fseek(f, 0, SEEK_END);
+            long size = ftell(f);
+            fseek(f, 0, SEEK_SET);
+            char *content = malloc((size_t)size + 1);
+            fread(content, 1, (size_t)size, f);
+            content[size] = '\0';
+            fclose(f);
+            cJSON *root = cJSON_Parse(content);
+            free(content);
+            if (root) {
+                cJSON *speeds = cJSON_GetObjectItem(root, "animation_speeds");
+                for (uint32_t i = 0; i < anim_count; i++) {
+                    float speed = 100.0f;
+                    if (anims[i]->name && speeds) {
+                        cJSON *val = cJSON_GetObjectItem(speeds, anims[i]->name);
+                        if (val && cJSON_IsNumber(val)) {
+                            speed = (float)val->valuedouble;
+                        }
+                    }
+                    anim_speeds[i] = speed;
+                    printf("  %s: PSA v1 (%u bones, %u frames) @ %.1f%%",
+                           anims[i]->name, anims[i]->numBones, anims[i]->numFrames, anim_speeds[i]);
+                    #ifdef PSA_HAS_PROPPOINTS
+                    printf(" | PropPoints=%u", anims[i]->numPropPoints);
+                    #endif
+                    printf("\n");
+                }
+                cJSON_Delete(root);
             }
         }
-        free(names);
     }
 
     printf("Exporting to glTF: %s\n", output_file);
@@ -235,16 +235,24 @@ int main(int argc, char *argv[]) {
     if (!mesh_name) mesh_name = strrchr(base_name, '\\');
     mesh_name = mesh_name ? mesh_name + 1 : base_name;
 
-    export_gltf(output_file, model, anims, anim_count, skel, mesh_name, anim_speeds, rest_pose_anim);
+    int export_status = export_gltf(output_file, model, anims, anim_count, skel, mesh_name, anim_speeds, rest_pose_anim);
+    if (!export_status) {
+        fprintf(stderr, "Error: Export failed\n");
+        free(anim_speeds);
+        if (skel) free_skeleton(skel);
+        for (uint32_t i = 0; i < anim_count; i++) {
+            free_psa(anims[i]);
+        }
+        free(anims);
+        free_pmd(model);
+        return 1;
+    }
 
     printf("Done! Exported %u animation(s)\n", anim_count);
 
     free(anim_speeds);
 
     // Cleanup
-    if (auto_skeleton_id) {
-        free(auto_skeleton_id);
-    }
     if (skel) free_skeleton(skel);
     for (uint32_t i = 0; i < anim_count; i++) {
         free_psa(anims[i]);

@@ -87,11 +87,6 @@ PSAAnimation* load_psa(const char *filename) {
     }
 
     fclose(f);
-    
-    // Debug information matching reference implementations
-    printf("Valid PSAv%u: Bones=%u, Frames=%u, Name='%s'\n", 
-           version, anim->numBones, anim->numFrames, anim->name);
-    
     return anim;
 }
 

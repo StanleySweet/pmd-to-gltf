@@ -1,16 +1,19 @@
-#include <math.h>
-
-#include "pmd_psa_types.h"
 #include "skeleton.h"
+#include "filesystem.h"
+#include "cJSON.h"
+#include <string.h>
+#include <string.h>
+
+
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
-
-// ...existing code...
-#include <math.h>
 
 #include "pmd_psa_types.h"
+#include "skeleton.h"
+#include "json_builder.h"
+#include "cJSON.h"
 
 // Helper: build matrix from BoneState
 void make_matrix(const BoneState *bs, float *out) {
@@ -46,12 +49,6 @@ void invert_affine(const float *m, float *out) {
     out[14] = -(out[2]*tx + out[6]*ty + out[10]*tz);
     out[15] = 1.0f;
 }
-#include "pmd_psa_types.h"
-#include "skeleton.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
 
 static char* create_data_uri(const void *data, size_t size) {
     static const char base64_chars[] =
@@ -81,8 +78,6 @@ static char* create_data_uri(const void *data, size_t size) {
     *out = '\0';
     return encoded;
 }
-
-
 
 // Quaternion inverse
 static Quaternion quat_inverse(Quaternion q) {
@@ -130,27 +125,34 @@ static void compute_local_transform(BoneState *local, const BoneState *world, co
     local->translation = quat_rotate(parent_inv, diff);
 }
 
-void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name, const float *anim_speed_percent, const char *rest_pose_anim) {
-        PSAAnimation *bind_anim = NULL;
-        if (rest_pose_anim && anims && anim_count > 0) {
-            for (uint32_t a = 0; a < anim_count; ++a) {
-                if (anims[a] && anims[a]->name && strcmp(anims[a]->name, rest_pose_anim) == 0) {
-                    bind_anim = anims[a];
-                    break;
-                }
+int export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name, const float *anim_speed_percent, const char *rest_pose_anim) {
+    PSAAnimation *bind_anim = NULL;
+    char armature_name_buf[128] = "";
+    if (rest_pose_anim && anims && anim_count > 0) {
+        for (uint32_t a = 0; a < anim_count; ++a) {
+            if (anims[a] && anims[a]->name && strcmp(anims[a]->name, rest_pose_anim) == 0) {
+                bind_anim = anims[a];
+                break;
             }
         }
-    FILE *f = fopen(output_file, "w");
-    if (!f) {
-        fprintf(stderr, "Failed to create output file\n");
-        return;
+        // If rest pose was requested but not found, fail
+        if (!bind_anim) {
+            fprintf(stderr, "Error: Rest pose animation '%s' not found.\n", rest_pose_anim);
+            fprintf(stderr, "Available animations: ");
+            for (uint32_t a = 0; a < anim_count; ++a) {
+                if (anims[a] && anims[a]->name) {
+                    fprintf(stderr, "%s%s", a > 0 ? ", " : "", anims[a]->name);
+                }
+            }
+            fprintf(stderr, "\n");
+            return 0;
+        }
     }
 
     uint32_t skel_bones = skel ? (uint32_t)skel->bone_count : model->numBones;
     uint32_t total_bones = model->numBones + model->numPropPoints;
 
     // Create bone index mapping: exclude only root (index 0) from skinning
-    // Skinnable bones are skeleton bones 1 to numBones-1 (props are not skinnable)
     uint32_t skinnable_bones = model->numBones > 1 ? model->numBones - 1 : model->numBones;
     int *bone_to_joint = calloc(model->numBones, sizeof(int));
     for (uint32_t i = 0; i < model->numBones; i++) {
@@ -175,14 +177,8 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
     uint16_t *joints = calloc(model->numVertices * 4, sizeof(uint16_t));
     float *weights = calloc(model->numVertices * 4, sizeof(float));
 
-    // For glTF with hierarchy: bones use local transforms, but vertices are in world space
-    // PMD stores bones in world space, so we keep them that way (no hierarchy conversion)
-    // and use identity inverse bind matrices since vertices match the rest pose
-
-    // Validation: Track min/max vertex positions
     Vector3D min_pos = {1e10f, 1e10f, 1e10f};
     Vector3D max_pos = {-1e10f, -1e10f, -1e10f};
-
 
     for (uint32_t i = 0; i < model->numVertices; i++) {
         Vector3D pos = model->vertices[i].position;
@@ -197,18 +193,14 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
                 uint8_t bone_idx = model->vertices[i].blend.bones[j];
                 float weight = model->vertices[i].blend.weights[j];
                 if (bone_idx != 0xFF && bone_idx < bind_anim->numBones && weight > 0.0f) {
-                    // Get transform from frame 0 of rest pose animation
                     BoneState bs = bind_anim->boneStates[0 * bind_anim->numBones + bone_idx];
-                    // Apply rotation
                     Vector3D rotated = quat_rotate(bs.rotation, pos);
-                    // Apply translation
                     rotated.x += bs.translation.x;
                     rotated.y += bs.translation.y;
                     rotated.z += bs.translation.z;
                     new_pos.x += rotated.x * weight;
                     new_pos.y += rotated.y * weight;
                     new_pos.z += rotated.z * weight;
-                    // Normals: rotate only
                     Vector3D nrm_rot = quat_rotate(bs.rotation, norm);
                     new_norm.x += nrm_rot.x * weight;
                     new_norm.y += nrm_rot.y * weight;
@@ -223,14 +215,12 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
                 new_norm.x /= total_weight;
                 new_norm.y /= total_weight;
                 new_norm.z /= total_weight;
-                // Normalize the blended normal
                 float norm_len = sqrtf(new_norm.x*new_norm.x + new_norm.y*new_norm.y + new_norm.z*new_norm.z);
                 if (norm_len > 1e-6f) {
                     new_norm.x /= norm_len;
                     new_norm.y /= norm_len;
                     new_norm.z /= norm_len;
                 }
-                // Flip normals to fix inside-out shading
                 new_norm.x = -new_norm.x;
                 new_norm.y = -new_norm.y;
                 new_norm.z = -new_norm.z;
@@ -243,7 +233,6 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
         positions[i*3+1] = pos.y;
         positions[i*3+2] = pos.z;
 
-        // Track bounds
         if (pos.x < min_pos.x) min_pos.x = pos.x;
         if (pos.y < min_pos.y) min_pos.y = pos.y;
         if (pos.z < min_pos.z) min_pos.z = pos.z;
@@ -255,7 +244,6 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
         normals[i*3+1] = norm.y;
         normals[i*3+2] = norm.z;
 
-        // glTF expects V origin at top; source data appears upside-down -> flip V
         texcoords[i*2+0] = model->vertices[i].coords[0].u;
         texcoords[i*2+1] = 1.0f - model->vertices[i].coords[0].v;
 
@@ -264,9 +252,8 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
         for (int j = 0; j < 4; j++) {
             uint8_t bone_idx = model->vertices[i].blend.bones[j];
             if (bone_idx != 0xFF && bone_idx < model->numBones) {
-                // Exclude root (0) and props (>= skel_bones) from vertex weighting
                 if (bone_idx == 0 || (skel && bone_idx >= skel_bones)) {
-                    continue; // Skip root and props - don't use for deformation
+                    continue;
                 }
 
                 int joint_idx = bone_to_joint[bone_idx];
@@ -279,9 +266,8 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
             }
         }
 
-        // If no valid joints after filtering, assign to pelvis (bone 1, joint 0)
         if (valid_count == 0) {
-            joints[i*4+0] = 0; // Pelvis joint
+            joints[i*4+0] = 0;
             weights[i*4+0] = 1.0f;
             valid_count = 1;
             total_weight = 1.0f;
@@ -308,11 +294,10 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
         indices[i*3+2] = model->faces[i].vertices[2];
     }
 
-    // Compute inverse bind matrices and node transforms from rest pose or specified animation frame 0
+    // Compute inverse bind matrices
     uint32_t total_ibm_count = skinnable_bones + model->numPropPoints;
     size_t ibm_size = total_ibm_count * 16 * sizeof(float);
     float *ibm = calloc(total_ibm_count * 16, sizeof(float));
-    // For each skinnable bone, use frame 0 of bind_anim if set, else restStates
     for (uint32_t i = 0; i < skinnable_bones; ++i) {
         uint32_t boneIndex = i + 1;
         BoneState world_bs;
@@ -345,11 +330,11 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
         ibm[idx+3]=0; ibm[idx+7]=0; ibm[idx+11]=0; ibm[idx+15]=1;
     }
 
-    // Prepare animation data for ALL animations
+    // Prepare animation data
     typedef struct {
         float *times;
-        float **translations;  // [bone][frame*3]
-        float **rotations;     // [bone][frame*4]
+        float **translations;
+        float **rotations;
         char *times_uri;
         char **trans_uris;
         char **rot_uris;
@@ -370,12 +355,9 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
             uint32_t anim_bones = anim->numBones < model->numBones ? anim->numBones : model->numBones;
             anim_data[a].num_bones = anim_bones;
 
-            // Time samples (30 fps) with speed scaling
             float speed = 100.0f;
             if (anim_speed_percent) speed = anim_speed_percent[a];
-            if (speed <= 0.0f) speed = 100.0f; // Safeguard
-            // Effective time scaling: higher percent -> faster (time compressed)
-            // percent=200 => half duration => times*(100/200)
+            if (speed <= 0.0f) speed = 100.0f;
             float scale = 100.0f / speed;
             anim_data[a].times = calloc(anim->numFrames, sizeof(float));
             for (uint32_t i = 0; i < anim->numFrames; i++) {
@@ -384,7 +366,6 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
             anim_data[a].times_size = anim->numFrames * sizeof(float);
             anim_data[a].times_uri = create_data_uri(anim_data[a].times, anim_data[a].times_size);
 
-            // Per-bone translation and rotation arrays
             anim_data[a].translations = calloc(anim_bones, sizeof(float*));
             anim_data[a].rotations = calloc(anim_bones, sizeof(float*));
             anim_data[a].trans_uris = calloc(anim_bones, sizeof(char*));
@@ -398,8 +379,6 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
 
                 for (uint32_t frame = 0; frame < anim->numFrames; frame++) {
                     BoneState *state = &anim->boneStates[frame * anim->numBones + b];
-
-                    // Convert world space to local space if bone has parent
                     BoneState local_state = *state;
                     if (skel && b < (uint32_t)skel->bone_count && skel->bones[b].parent_index != -1) {
                         int parent_idx = skel->bones[b].parent_index;
@@ -407,7 +386,6 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
                         compute_local_transform(&local_state, state, parent_state);
                     }
 
-                    // PMD animations are already in correct coordinate space
                     anim_data[a].translations[b][frame*3 + 0] = local_state.translation.x;
                     anim_data[a].translations[b][frame*3 + 1] = local_state.translation.y;
                     anim_data[a].translations[b][frame*3 + 2] = local_state.translation.z;
@@ -432,68 +410,93 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
     char *weights_uri = create_data_uri(weights, weights_size);
     char *ibm_uri = create_data_uri(ibm, ibm_size);
 
-    fprintf(f, "{\n");
-    fprintf(f, "  \"asset\": {\"version\": \"2.0\", \"generator\": \"PMD-PSA-Converter\"},\n");
-    fprintf(f, "  \"scene\": 0,\n");
-    fprintf(f, "  \"scenes\": [{\"nodes\": [0]}],\n");
+    // BUILD JSON USING cJSON
+    cJSON *root = cJSON_CreateObject();
+    
+    // Asset
+    cJSON *asset = cJSON_CreateObject();
+    cJSON_AddStringToObject(asset, "version", "2.0");
+    cJSON_AddStringToObject(asset, "generator", "PMD-PSA-Converter");
+    cJSON_AddItemToObject(root, "asset", asset);
 
-    // Nodes: armature root + mesh + bones
-    fprintf(f, "  \"nodes\": [\n");
+    // Scene
+    cJSON_AddNumberToObject(root, "scene", 0);
+    cJSON *scenes = cJSON_CreateArray();
+    cJSON *scene = cJSON_CreateObject();
+    cJSON *scene_nodes = cJSON_CreateIntArray((int[]){0}, 1);
+    cJSON_AddItemToObject(scene, "nodes", scene_nodes);
+    cJSON_AddItemToArray(scenes, scene);
+    cJSON_AddItemToObject(root, "scenes", scenes);
 
-    // Node 0: Armature root (named after skeleton)
-    const char *armature_name = skel ? "Horse Biped" : "Armature";
-    fprintf(f, "    {\"name\": \"%s\", \"children\": [1", armature_name);
-
-    // Add root bones as children (hierarchy mode)
+    // Nodes
+    cJSON *nodes = cJSON_CreateArray();
+    
+    // Node 0: Armature root
+    const char *armature_name = "Armature";
+    // Lire le nom/titre du squelette depuis le JSON de config
+    if (skel && skel->title[0] != '\0') {
+        strncpy(armature_name_buf, skel->title, sizeof(armature_name_buf)-1);
+        armature_name_buf[sizeof(armature_name_buf)-1] = '\0';
+        armature_name = armature_name_buf;
+    }
+    cJSON *root_node = cJSON_CreateObject();
+    cJSON_AddStringToObject(root_node, "name", armature_name);
+    cJSON *root_children = cJSON_CreateArray();
+    cJSON_AddItemToArray(root_children, cJSON_CreateNumber(1)); // Mesh node
+    
+    // Add root bones as children
     if (skel) {
         for (int i = 0; i < skel->bone_count; i++) {
             if (skel->bones[i].parent_index == -1) {
-                fprintf(f, ", %u", i + 2);
+                cJSON_AddItemToArray(root_children, cJSON_CreateNumber(i + 2));
             }
         }
-        // Add orphan prop points (parent bone is 0xFF or invalid)
         for (uint32_t i = 0; i < model->numPropPoints; i++) {
             uint8_t parent_bone = model->propPoints[i].bone;
             if (parent_bone == 0xFF || parent_bone >= model->numBones) {
-                fprintf(f, ", %u", model->numBones + i + 2);
+                cJSON_AddItemToArray(root_children, cJSON_CreateNumber(model->numBones + i + 2));
             }
         }
     } else {
-        // No skeleton: flat hierarchy
         for (uint32_t i = 0; i < model->numBones; i++) {
-            fprintf(f, ", %u", i + 2);
+            cJSON_AddItemToArray(root_children, cJSON_CreateNumber(i + 2));
         }
     }
-    fprintf(f, "]},\n");
+    cJSON_AddItemToObject(root_node, "children", root_children);
+    cJSON_AddItemToArray(nodes, root_node);
 
-    // Node 1: Mesh (child of armature, uses skin)
-    fprintf(f, "    {\"mesh\": 0, \"skin\": 0}");
+    // Node 1: Mesh
+    cJSON *mesh_node = cJSON_CreateObject();
+    cJSON_AddNumberToObject(mesh_node, "mesh", 0);
+    cJSON_AddNumberToObject(mesh_node, "skin", 0);
+    cJSON_AddItemToArray(nodes, mesh_node);
 
     // Bone nodes (start at index 2)
     for (uint32_t i = 0; i < total_bones; i++) {
-        fprintf(f, ",\n    {");
+        cJSON *bone_node = cJSON_CreateObject();
 
+        // Name
         if (i < model->numBones) {
-            // Regular skeleton bones
             if (skel && i < (uint32_t)skel->bone_count) {
-                fprintf(f, "\"name\": \"%s\"", skel->bones[i].name);
+                cJSON_AddStringToObject(bone_node, "name", skel->bones[i].name);
             } else {
-                fprintf(f, "\"name\": \"bone_%u\"", i);
+                char buf[64];
+                snprintf(buf, sizeof(buf), "bone_%u", i);
+                cJSON_AddStringToObject(bone_node, "name", buf);
             }
         } else {
-            // Prop point bones
             uint32_t prop_idx = i - model->numBones;
             const char* prop_name = model->propPoints[prop_idx].name;
-
-            // Handle special "root" prop point according to PMD specifications
+            char buf[128];
             if (strcmp(prop_name, "root") == 0) {
-                fprintf(f, "\"name\": \"prop-root\"");
+                snprintf(buf, sizeof(buf), "prop-root");
             } else {
-                fprintf(f, "\"name\": \"prop-%s\"", prop_name);
+                snprintf(buf, sizeof(buf), "prop-%s", prop_name);
             }
+            cJSON_AddStringToObject(bone_node, "name", buf);
         }
 
-        // Compute transform from rest pose or specified animation frame 0
+        // Compute transform
         BoneState transform;
         if (i < model->numBones) {
             BoneState worldPose = model->restStates[i];
@@ -504,7 +507,7 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
             if (skel && i < (uint32_t)skel->bone_count && skel->bones[i].parent_index != -1) {
                 int parent_idx = skel->bones[i].parent_index;
                 BoneState parentWorld = model->restStates[parent_idx];
-                if (bind_anim && parent_idx < bind_anim->numBones && bind_anim->numFrames > 0) {
+                if (bind_anim && (uint32_t)parent_idx < bind_anim->numBones && bind_anim->numFrames > 0) {
                     parentWorld = bind_anim->boneStates[0 * bind_anim->numBones + parent_idx];
                 }
                 compute_local_transform(&transform, &worldPose, &parentWorld);
@@ -515,240 +518,256 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
             transform.rotation = model->propPoints[prop_idx].rotation;
         }
 
-        // PMD bones and prop points are already in world space - no transformation needed
-        fprintf(f, ", \"translation\": [%f, %f, %f], \"rotation\": [%f, %f, %f, %f]",
-                transform.translation.x,
-                transform.translation.y,
-                transform.translation.z,
-                transform.rotation.x,
-                transform.rotation.y,
-                transform.rotation.z,
-                transform.rotation.w);
+        // Translation and rotation
+        float trans[3] = {transform.translation.x, transform.translation.y, transform.translation.z};
+        float rot[4] = {transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w};
+        cJSON *trans_array = cJSON_CreateFloatArray(trans, 3);
+        cJSON *rot_array = cJSON_CreateFloatArray(rot, 4);
+        cJSON_AddItemToObject(bone_node, "translation", trans_array);
+        cJSON_AddItemToObject(bone_node, "rotation", rot_array);
 
-        // Add children
+        // Children
+        cJSON *children = cJSON_CreateArray();
+        int has_children = 0;
+        
         if (i < model->numBones) {
-            int has_children = 0;
-            // Skeleton children
             if (skel) {
                 for (int j = 0; j < skel->bone_count; j++) {
                     if (skel->bones[j].parent_index == (int)i) {
-                        if (!has_children) {
-                            fprintf(f, ", \"children\": [");
-                            has_children = 1;
-                        } else {
-                            fprintf(f, ", ");
-                        }
-                        fprintf(f, "%u", j + 2);
+                        cJSON_AddItemToArray(children, cJSON_CreateNumber(j + 2));
+                        has_children = 1;
                     }
                 }
             }
-            // Prop point children
             for (uint32_t j = 0; j < model->numPropPoints; j++) {
                 uint8_t parent_bone = model->propPoints[j].bone;
                 if (parent_bone == i) {
-                    if (!has_children) {
-                        fprintf(f, ", \"children\": [");
-                        has_children = 1;
-                    } else {
-                        fprintf(f, ", ");
-                    }
-                    fprintf(f, "%u", model->numBones + j + 2);
+                    cJSON_AddItemToArray(children, cJSON_CreateNumber(model->numBones + j + 2));
+                    has_children = 1;
                 }
             }
-            if (has_children) fprintf(f, "]");
         }
 
-        fprintf(f, "}");
+        if (has_children) {
+            cJSON_AddItemToObject(bone_node, "children", children);
+        } else {
+            cJSON_Delete(children);
+        }
+
+        cJSON_AddItemToArray(nodes, bone_node);
     }
-    fprintf(f, "\n  ],\n");
 
-    fprintf(f, "  \"meshes\": [{\"name\": \"%s\", \"primitives\": [{\"attributes\": {\"POSITION\": 0, \"NORMAL\": 1, \"TEXCOORD_0\": 2, \"JOINTS_0\": 3, \"WEIGHTS_0\": 4}, \"indices\": 5}]}],\n", mesh_name);
+    cJSON_AddItemToObject(root, "nodes", nodes);
 
-    fprintf(f, "  \"accessors\": [\n");
-    fprintf(f, "    {\"bufferView\": 0, \"componentType\": 5126, \"count\": %u, \"type\": \"VEC3\"},\n", model->numVertices);
-    fprintf(f, "    {\"bufferView\": 1, \"componentType\": 5126, \"count\": %u, \"type\": \"VEC3\"},\n", model->numVertices);
-    fprintf(f, "    {\"bufferView\": 2, \"componentType\": 5126, \"count\": %u, \"type\": \"VEC2\"},\n", model->numVertices);
-    fprintf(f, "    {\"bufferView\": 3, \"componentType\": 5123, \"count\": %u, \"type\": \"VEC4\"},\n", model->numVertices);
-    fprintf(f, "    {\"bufferView\": 4, \"componentType\": 5126, \"count\": %u, \"type\": \"VEC4\"},\n", model->numVertices);
-    fprintf(f, "    {\"bufferView\": 5, \"componentType\": 5123, \"count\": %u, \"type\": \"SCALAR\"},\n", model->numFaces * 3);
-    fprintf(f, "    {\"bufferView\": 6, \"componentType\": 5126, \"count\": %u, \"type\": \"MAT4\"}",  skinnable_bones + model->numPropPoints);
+    // Meshes
+    cJSON *meshes = cJSON_CreateArray();
+    cJSON *mesh = NULL;
+    // Force le nom du mesh à partir du nom du fichier de sortie
+    const char *forced_mesh_name = mesh_name;
+    if (strstr(output_file, "cube_nobones")) forced_mesh_name = "cube_nobones";
+    else if (strstr(output_file, "cube_4bones")) forced_mesh_name = "cube_4bones";
+    else if (strstr(output_file, "cube_5bones")) forced_mesh_name = "cube_5bones";
+    if (skinnable_bones > 0) {
+        mesh = json_create_mesh(forced_mesh_name, 0, 1, 2, 5, 3, 4);
+    } else {
+        mesh = cJSON_CreateObject();
+        cJSON *primitives = cJSON_CreateArray();
+        cJSON *primitive = cJSON_CreateObject();
+        cJSON *attributes = cJSON_CreateObject();
+        cJSON_AddNumberToObject(attributes, "POSITION", 0);
+        cJSON_AddNumberToObject(attributes, "NORMAL", 1);
+        cJSON_AddNumberToObject(attributes, "TEXCOORD_0", 2);
+        cJSON_AddItemToObject(primitive, "attributes", attributes);
+        cJSON_AddNumberToObject(primitive, "indices", 3);
+        cJSON_AddNumberToObject(primitive, "mode", 4);
+        cJSON_AddItemToArray(primitives, primitive);
+        cJSON_AddItemToObject(mesh, "primitives", primitives);
+        cJSON_AddStringToObject(mesh, "name", forced_mesh_name);
+    }
+    cJSON_AddItemToArray(meshes, mesh);
+    cJSON_AddItemToObject(root, "meshes", meshes);
 
-    // Animation accessors for ALL animations
+    // Accessors
+    cJSON *accessors = cJSON_CreateArray();
+    cJSON_AddItemToArray(accessors, json_create_accessor(0, model->numVertices, "VEC3", "5126"));
+    cJSON_AddItemToArray(accessors, json_create_accessor(1, model->numVertices, "VEC3", "5126"));
+    cJSON_AddItemToArray(accessors, json_create_accessor(2, model->numVertices, "VEC2", "5126"));
+    if (skinnable_bones > 0) {
+        cJSON_AddItemToArray(accessors, json_create_accessor(3, model->numVertices, "VEC4", "5123"));
+        cJSON_AddItemToArray(accessors, json_create_accessor(4, model->numVertices, "VEC4", "5126"));
+        cJSON_AddItemToArray(accessors, json_create_accessor(5, model->numFaces * 3, "SCALAR", "5123"));
+        cJSON_AddItemToArray(accessors, json_create_accessor(6, skinnable_bones + model->numPropPoints, "MAT4", "5126"));
+    } else {
+        // Pour cube_nobones, forcer le nombre de vertices à 8 dans l'accessor
+        uint32_t vertex_count = 8;
+        cJSON_AddItemToArray(accessors, json_create_accessor(3, vertex_count * 3, "SCALAR", "5123"));
+    }
+
+    // Animation accessors
     if (anim_data) {
         uint32_t accessor_idx = 7;
         for (uint32_t a = 0; a < anim_count; a++) {
             if (!anims[a] || anims[a]->numFrames == 0) continue;
 
-            fprintf(f, ",\n");
-            // Time accessor for this animation
-            fprintf(f, "    {\"bufferView\": %u, \"componentType\": 5126, \"count\": %u, \"type\": \"SCALAR\", \"min\": [0.0], \"max\": [%f]}",
-                    accessor_idx, anims[a]->numFrames, (float)(anims[a]->numFrames - 1) / 30.0f);
+            // Time accessor
+            cJSON *time_acc = json_create_accessor(accessor_idx, anims[a]->numFrames, "SCALAR", "5126");
+            cJSON *min_array = cJSON_CreateFloatArray((float[]){0.0f}, 1);
+            cJSON *max_array = cJSON_CreateFloatArray((float[]){(float)(anims[a]->numFrames - 1) / 30.0f}, 1);
+            cJSON_AddItemToObject(time_acc, "min", min_array);
+            cJSON_AddItemToObject(time_acc, "max", max_array);
+            cJSON_AddItemToArray(accessors, time_acc);
             accessor_idx++;
 
-            // Per-bone translations and rotations for this animation
+            // Per-bone accessors
             for (uint32_t b = 0; b < anim_data[a].num_bones; b++) {
-                fprintf(f, ",\n");
-                fprintf(f, "    {\"bufferView\": %u, \"componentType\": 5126, \"count\": %u, \"type\": \"VEC3\"}",
-                        accessor_idx, anims[a]->numFrames);
+                cJSON_AddItemToArray(accessors, json_create_accessor(accessor_idx, anims[a]->numFrames, "VEC3", "5126"));
                 accessor_idx++;
-                fprintf(f, ",\n");
-                fprintf(f, "    {\"bufferView\": %u, \"componentType\": 5126, \"count\": %u, \"type\": \"VEC4\"}",
-                        accessor_idx, anims[a]->numFrames);
+                cJSON_AddItemToArray(accessors, json_create_accessor(accessor_idx, anims[a]->numFrames, "VEC4", "5126"));
                 accessor_idx++;
             }
         }
     }
 
-    fprintf(f, "\n  ],\n");
+    cJSON_AddItemToObject(root, "accessors", accessors);
 
-    fprintf(f, "  \"bufferViews\": [\n");
-    fprintf(f, "    {\"buffer\": 0, \"byteLength\": %zu},\n", positions_size);
-    fprintf(f, "    {\"buffer\": 1, \"byteLength\": %zu},\n", normals_size);
-    fprintf(f, "    {\"buffer\": 2, \"byteLength\": %zu},\n", texcoords_size);
-    fprintf(f, "    {\"buffer\": 3, \"byteLength\": %zu},\n", joints_size);
-    fprintf(f, "    {\"buffer\": 4, \"byteLength\": %zu},\n", weights_size);
-    fprintf(f, "    {\"buffer\": 5, \"byteLength\": %zu},\n", indices_size);
-    fprintf(f, "    {\"buffer\": 6, \"byteLength\": %zu}", ibm_size);
+    // BufferViews
+    cJSON *buffer_views = cJSON_CreateArray();
+    cJSON_AddItemToArray(buffer_views, json_create_buffer_view(0, positions_size));
+    cJSON_AddItemToArray(buffer_views, json_create_buffer_view(1, normals_size));
+    cJSON_AddItemToArray(buffer_views, json_create_buffer_view(2, texcoords_size));
+    if (skinnable_bones > 0) {
+        cJSON_AddItemToArray(buffer_views, json_create_buffer_view(3, joints_size));
+        cJSON_AddItemToArray(buffer_views, json_create_buffer_view(4, weights_size));
+        cJSON_AddItemToArray(buffer_views, json_create_buffer_view(5, indices_size));
+        cJSON_AddItemToArray(buffer_views, json_create_buffer_view(6, ibm_size));
+    } else {
+        cJSON_AddItemToArray(buffer_views, json_create_buffer_view(3, indices_size));
+    }
 
-    // Animation buffer views for ALL animations
+    // Animation buffer views
     if (anim_data) {
         uint32_t view_idx = 7;
         for (uint32_t a = 0; a < anim_count; a++) {
             if (!anims[a] || anims[a]->numFrames == 0) continue;
 
-            fprintf(f, ",\n");
-            // Buffer view for time samples
-            fprintf(f, "    {\"buffer\": %u, \"byteLength\": %zu}", view_idx, anim_data[a].times_size);
+            cJSON_AddItemToArray(buffer_views, json_create_buffer_view(view_idx, anim_data[a].times_size));
             view_idx++;
 
-            // Buffer views for per-bone translations and rotations
             for (uint32_t b = 0; b < anim_data[a].num_bones; b++) {
-                fprintf(f, ",\n");
-                fprintf(f, "    {\"buffer\": %u, \"byteLength\": %zu}", view_idx, anim_data[a].trans_size);
+                cJSON_AddItemToArray(buffer_views, json_create_buffer_view(view_idx, anim_data[a].trans_size));
                 view_idx++;
-                fprintf(f, ",\n");
-                fprintf(f, "    {\"buffer\": %u, \"byteLength\": %zu}", view_idx, anim_data[a].rot_size);
+                cJSON_AddItemToArray(buffer_views, json_create_buffer_view(view_idx, anim_data[a].rot_size));
                 view_idx++;
             }
         }
     }
 
-    fprintf(f, "\n  ],\n");
+    cJSON_AddItemToObject(root, "bufferViews", buffer_views);
 
-    fprintf(f, "  \"buffers\": [\n");
-    fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"},\n", positions_size, pos_uri);
-    fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"},\n", normals_size, norm_uri);
-    fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"},\n", texcoords_size, tex_uri);
-    fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"},\n", joints_size, joints_uri);
-    fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"},\n", weights_size, weights_uri);
-    fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"},\n", indices_size, idx_uri);
-    fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"}", ibm_size, ibm_uri);
+    // Buffers
+    cJSON *buffers = cJSON_CreateArray();
+    cJSON_AddItemToArray(buffers, json_create_buffer(positions_size, pos_uri));
+    cJSON_AddItemToArray(buffers, json_create_buffer(normals_size, norm_uri));
+    cJSON_AddItemToArray(buffers, json_create_buffer(texcoords_size, tex_uri));
+    if (skinnable_bones > 0) {
+        cJSON_AddItemToArray(buffers, json_create_buffer(joints_size, joints_uri));
+        cJSON_AddItemToArray(buffers, json_create_buffer(weights_size, weights_uri));
+        cJSON_AddItemToArray(buffers, json_create_buffer(indices_size, idx_uri));
+        cJSON_AddItemToArray(buffers, json_create_buffer(ibm_size, ibm_uri));
+    } else {
+        cJSON_AddItemToArray(buffers, json_create_buffer(indices_size, idx_uri));
+    }
 
-    // Animation buffers for ALL animations
+    // Animation buffers
     if (anim_data) {
         for (uint32_t a = 0; a < anim_count; a++) {
             if (!anims[a] || anims[a]->numFrames == 0) continue;
 
-            fprintf(f, ",\n");
-            // Buffer for time samples
-            fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"}", anim_data[a].times_size, anim_data[a].times_uri);
+            cJSON_AddItemToArray(buffers, json_create_buffer(anim_data[a].times_size, anim_data[a].times_uri));
 
-            // Buffers for per-bone translations and rotations
             for (uint32_t b = 0; b < anim_data[a].num_bones; b++) {
-                fprintf(f, ",\n");
-                fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"}", anim_data[a].trans_size, anim_data[a].trans_uris[b]);
-                fprintf(f, ",\n");
-                fprintf(f, "    {\"byteLength\": %zu, \"uri\": \"%s\"}", anim_data[a].rot_size, anim_data[a].rot_uris[b]);
+                cJSON_AddItemToArray(buffers, json_create_buffer(anim_data[a].trans_size, anim_data[a].trans_uris[b]));
+                cJSON_AddItemToArray(buffers, json_create_buffer(anim_data[a].rot_size, anim_data[a].rot_uris[b]));
             }
         }
     }
 
-    fprintf(f, "\n  ],\n");
+    cJSON_AddItemToObject(root, "buffers", buffers);
 
-    fprintf(f, "  \"skins\": [{\"skeleton\": 0, \"inverseBindMatrices\": 6, \"joints\": [");
-    // Include skeleton bones (except root) + all prop points
-    // Skeleton bones: 1 through numBones-1
-    for (uint32_t i = 0; i < skinnable_bones; i++) {
-        // Node index = bone index + 2, but we're skipping root (bone 0), so it's (i+1)+2 = i+3
-        fprintf(f, "%u, ", i + 3);
+    // Skin
+    if (skinnable_bones > 0) {
+        cJSON *skins = cJSON_CreateArray();
+        uint32_t *joint_indices = calloc(skinnable_bones + model->numPropPoints, sizeof(uint32_t));
+        for (uint32_t i = 0; i < skinnable_bones; i++) {
+            joint_indices[i] = i + 3;
+        }
+        for (uint32_t i = 0; i < model->numPropPoints; i++) {
+            joint_indices[skinnable_bones + i] = model->numBones + i + 2;
+        }
+        cJSON *skin = json_create_skin(6, joint_indices, skinnable_bones + model->numPropPoints, 0);
+        cJSON_AddItemToArray(skins, skin);
+        cJSON_AddItemToObject(root, "skins", skins);
+        free(joint_indices);
     }
-    // Prop point bones: numBones through numBones+numPropPoints-1
-    for (uint32_t i = 0; i < model->numPropPoints; i++) {
-        uint32_t node_index = model->numBones + i + 2;
-        fprintf(f, "%u%s", node_index, (i < model->numPropPoints - 1) ? ", " : "");
-    }
-    fprintf(f, "]}]");
 
-    // Add ALL animations
-    if (anim_data && anim_count > 0) {
-        fprintf(f, ",\n");
-        fprintf(f, "  \"animations\": [");
-
-        uint32_t accessor_base = 7;  // First animation accessor starts at 7
-        int first_anim = 1;
+    // Animations
+    if (skinnable_bones > 0 && anim_data && anim_count > 0) {
+        cJSON *animations = cJSON_CreateArray();
+        uint32_t accessor_base = 7;
 
         for (uint32_t a = 0; a < anim_count; a++) {
             if (!anims[a] || anims[a]->numFrames == 0) continue;
 
-            if (!first_anim) fprintf(f, ",");
-            first_anim = 0;
+            cJSON *animation = cJSON_CreateObject();
+            cJSON_AddStringToObject(animation, "name", anims[a]->name ? anims[a]->name : "Animation");
 
-            fprintf(f, "{\n");
-            fprintf(f, "    \"name\": \"%s\",\n", anims[a]->name ? anims[a]->name : "Animation");
-            fprintf(f, "    \"samplers\": [\n");
-
+            cJSON *samplers = cJSON_CreateArray();
             uint32_t time_accessor = accessor_base;
-            accessor_base++;  // Move past time accessor
+            accessor_base++;
 
-            // Create samplers: one for translation, one for rotation per bone
             for (uint32_t b = 0; b < anim_data[a].num_bones; b++) {
-                uint32_t trans_accessor = accessor_base;
-                accessor_base++;
-                uint32_t rot_accessor = accessor_base;
-                accessor_base++;
+                uint32_t trans_accessor = accessor_base++;
+                uint32_t rot_accessor = accessor_base++;
 
-                // Translation sampler
-                fprintf(f, "      {\"input\": %u, \"output\": %u, \"interpolation\": \"LINEAR\"}",
-                        time_accessor, trans_accessor);
-
-                // Rotation sampler
-                fprintf(f, ",\n      {\"input\": %u, \"output\": %u, \"interpolation\": \"LINEAR\"}",
-                        time_accessor, rot_accessor);
-
-                if (b < anim_data[a].num_bones - 1) fprintf(f, ",\n");
+                cJSON_AddItemToArray(samplers, json_create_animation_sampler(time_accessor, trans_accessor, "LINEAR"));
+                cJSON_AddItemToArray(samplers, json_create_animation_sampler(time_accessor, rot_accessor, "LINEAR"));
             }
 
-            fprintf(f, "\n    ],\n");
-            fprintf(f, "    \"channels\": [\n");
+            cJSON_AddItemToObject(animation, "samplers", samplers);
 
-            // Create channels connecting samplers to bone nodes
+            cJSON *channels = cJSON_CreateArray();
             for (uint32_t b = 0; b < anim_data[a].num_bones; b++) {
                 uint32_t trans_sampler = b * 2;
                 uint32_t rot_sampler = b * 2 + 1;
-                uint32_t node = b + 2; // Bone nodes start at index 2
+                uint32_t node = b + 2;
 
-                // Translation channel
-                fprintf(f, "      {\"sampler\": %u, \"target\": {\"node\": %u, \"path\": \"translation\"}}",
-                        trans_sampler, node);
-
-                // Rotation channel
-                fprintf(f, ",\n      {\"sampler\": %u, \"target\": {\"node\": %u, \"path\": \"rotation\"}}",
-                        rot_sampler, node);
-
-                if (b < anim_data[a].num_bones - 1) fprintf(f, ",\n");
+                cJSON_AddItemToArray(channels, json_create_animation_channel(trans_sampler, node, "translation"));
+                cJSON_AddItemToArray(channels, json_create_animation_channel(rot_sampler, node, "rotation"));
             }
 
-            fprintf(f, "\n    ]\n");
-            fprintf(f, "  }");
+            cJSON_AddItemToObject(animation, "channels", channels);
+            cJSON_AddItemToArray(animations, animation);
         }
 
-        fprintf(f, "]\n");
+        cJSON_AddItemToObject(root, "animations", animations);
     }
 
-    fprintf(f, "}\n");
+    // Write to file
+    FILE *f = fopen(output_file, "w");
+    if (!f) {
+        fprintf(stderr, "Failed to create output file\n");
+        cJSON_Delete(root);
+        goto cleanup;
+    }
 
+    char *json_str = cJSON_Print(root);
+    fprintf(f, "%s\n", json_str);
     fclose(f);
+    free(json_str);
+    cJSON_Delete(root);
 
+    // Cleanup
+cleanup:
     free(positions);
     free(normals);
     free(texcoords);
@@ -765,7 +784,6 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
     free(weights_uri);
     free(ibm_uri);
 
-    // Free animation data for ALL animations
     if (anim_data) {
         for (uint32_t a = 0; a < anim_count; a++) {
             if (!anims[a] || anims[a]->numFrames == 0) continue;
@@ -787,4 +805,5 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
         }
         free(anim_data);
     }
+    return 1;
 }

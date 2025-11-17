@@ -3,6 +3,14 @@
 #include <stdlib.h>
 
 // Write helpers for little-endian data
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include "../src/skeleton.h"
+int export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name, const float *anim_speed_percent, const char *rest_pose_anim);
+#ifdef __cplusplus
+}
+#endif
 static void write_u32(FILE *f, uint32_t val) {
     uint8_t buf[4];
     buf[0] = val & 0xFF;
@@ -46,8 +54,15 @@ static void write_bone_state(FILE *f, BoneState state) {
 }
 
 int write_pmd(const char *filename, const PMDModel *model) {
+    if (!model) { fprintf(stderr, "[PMDWriter] Model NULL\n"); return 0; }
+    if (model->numVertices > 0 && !model->vertices) { fprintf(stderr, "[PMDWriter] Vertices NULL\n"); return 0; }
+    if (model->numFaces > 0 && !model->faces) { fprintf(stderr, "[PMDWriter] Faces NULL\n"); return 0; }
+    if (model->numBones > 0 && !model->restStates) { fprintf(stderr, "[PMDWriter] restStates NULL\n"); return 0; }
+    if (model->numPropPoints > 0 && !model->propPoints) { fprintf(stderr, "[PMDWriter] propPoints NULL\n"); return 0; }
+
     FILE *f = fopen(filename, "wb");
     if (!f) {
+        fprintf(stderr, "[PMDWriter] Impossible d'ouvrir %s\n", filename);
         return 0;
     }
 
@@ -62,6 +77,7 @@ int write_pmd(const char *filename, const PMDModel *model) {
     data_size += model->numBones * (3*4 + 4*4);  // bone states
     data_size += 4;  // numPropPoints
     for (uint32_t i = 0; i < model->numPropPoints; i++) {
+        if (!model->propPoints[i].name) { fprintf(stderr, "[PMDWriter] propPoint name NULL\n"); fclose(f); return 0; }
         data_size += 4;  // nameLength
         data_size += (uint32_t)strlen(model->propPoints[i].name);  // name
         data_size += 3*4 + 4*4 + 1;  // translation, rotation, bone
@@ -75,17 +91,15 @@ int write_pmd(const char *filename, const PMDModel *model) {
     // Write vertices
     write_u32(f, model->numVertices);
     write_u32(f, model->numTexCoords);
-    
     for (uint32_t i = 0; i < model->numVertices; i++) {
         Vertex *v = &model->vertices[i];
+        if (!v->coords) { fprintf(stderr, "[PMDWriter] Vertex coords NULL\n"); fclose(f); return 0; }
         write_vec3(f, v->position);
         write_vec3(f, v->normal);
-        
         for (uint32_t j = 0; j < model->numTexCoords; j++) {
             write_float(f, v->coords[j].u);
             write_float(f, v->coords[j].v);
         }
-        
         for (int j = 0; j < 4; j++) {
             write_u8(f, v->blend.bones[j]);
         }
@@ -125,8 +139,14 @@ int write_pmd(const char *filename, const PMDModel *model) {
 }
 
 int write_psa(const char *filename, const PSAAnimation *anim) {
+    if (!anim) { fprintf(stderr, "[PSAWriter] Animation NULL\n"); return 0; }
+    if (!anim->name) { fprintf(stderr, "[PSAWriter] name NULL\n"); return 0; }
+    if (anim->numBones == 0 || anim->numFrames == 0) { fprintf(stderr, "[PSAWriter] numBones ou numFrames nul\n"); return 0; }
+    if (!anim->boneStates) { fprintf(stderr, "[PSAWriter] boneStates NULL\n"); return 0; }
+
     FILE *f = fopen(filename, "wb");
     if (!f) {
+        fprintf(stderr, "[PSAWriter] Impossible d'ouvrir %s\n", filename);
         return 0;
     }
 

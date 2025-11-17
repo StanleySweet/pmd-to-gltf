@@ -140,12 +140,6 @@ PMDModel* load_pmd(const char *filename) {
     }
 
     fclose(f);
-    
-    // Debug information matching pmd2collada reference implementation
-    printf("Valid PMDv%u: Verts=%u, Faces=%u, Bones=%u, Props=%u\n", 
-           model->version, model->numVertices, model->numFaces, 
-           model->numBones, model->numPropPoints);
-    
     return model;
 }
 

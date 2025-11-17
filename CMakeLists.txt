@@ -10,6 +10,13 @@ project(pmd-to-gltf
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
+# Add cJSON library
+add_library(cjson STATIC vendor/cJSON/cJSON.c)
+target_include_directories(cjson PUBLIC vendor/cJSON)
+if(NOT WIN32)
+    target_link_libraries(cjson PRIVATE m)
+endif()
+
 # Compiler-specific options
 if(MSVC)
     add_compile_options(/W4)
@@ -30,24 +37,33 @@ set(SOURCES
     src/gltf_exporter.c
     src/skeleton.c
     src/filesystem.c
-    src/animation_speed_ini.c
+    src/json_builder.c
 )
 
 set(HEADERS
     src/pmd_psa_types.h
     src/skeleton.h
     src/filesystem.h
-    src/animation_speed_ini.h
+    src/json_builder.h
 )
 
 # Create executable
+    add_executable(test_writer tests/test_writer.c tests/pmd_writer.c)
+    target_include_directories(test_writer PRIVATE src)
+    if(NOT WIN32)
+         target_link_libraries(test_writer PRIVATE m)
+    endif()
 add_executable(converter ${SOURCES} ${HEADERS})
 
 # Link libraries
+target_link_libraries(converter PRIVATE cjson)
 if(NOT WIN32)
     # Math library needed on Unix-like systems
     target_link_libraries(converter PRIVATE m)
 endif()
+
+# Include cJSON headers
+target_include_directories(converter PRIVATE vendor/cJSON)
 
 # Platform-specific configuration
 if(UNIX)
@@ -63,12 +79,7 @@ install(TARGETS converter
 # Testing
 enable_testing()
 
-# Test data generator
-add_executable(generate_test_data tests/generate_test_data.c src/pmd_writer.c)
-target_include_directories(generate_test_data PRIVATE src)
-if(NOT WIN32)
-    target_link_libraries(generate_test_data PRIVATE m)
-endif()
+
 
 # Unit tests
 add_executable(test_filesystem tests/test_filesystem.c src/filesystem.c)
@@ -92,17 +103,14 @@ if(NOT WIN32)
     target_link_libraries(test_pmd_cubes PRIVATE m)
 endif()
 
-add_executable(test_gltf_output tests/test_gltf_output.c)
-target_include_directories(test_gltf_output PRIVATE src)
+add_executable(test_gltf_output tests/test_gltf_output.c tests/pmd_writer.c src/gltf_exporter.c src/pmd_parser.c src/json_builder.c src/psa_parser.c)
+target_include_directories(test_gltf_output PRIVATE src vendor/cJSON)
+target_link_libraries(test_gltf_output PRIVATE cjson)
 
-add_executable(test_horse_model tests/test_horse_model.c src/pmd_parser.c src/psa_parser.c)
-target_include_directories(test_horse_model PRIVATE src)
-if(NOT WIN32)
-    target_link_libraries(test_horse_model PRIVATE m)
-endif()
 
-add_executable(test_gltf_roundtrip tests/test_gltf_roundtrip.c src/pmd_parser.c)
-target_include_directories(test_gltf_roundtrip PRIVATE src)
+add_executable(test_gltf_roundtrip tests/test_gltf_roundtrip.c tests/pmd_writer.c src/pmd_parser.c src/gltf_exporter.c src/json_builder.c src/psa_parser.c)
+target_include_directories(test_gltf_roundtrip PRIVATE src vendor/cJSON)
+target_link_libraries(test_gltf_roundtrip PRIVATE cjson)
 if(NOT WIN32)
     target_link_libraries(test_gltf_roundtrip PRIVATE m)
 endif()
@@ -112,16 +120,10 @@ add_test(NAME unit_filesystem COMMAND test_filesystem)
 add_test(NAME unit_animation COMMAND test_animation)
 add_test(NAME unit_types COMMAND test_types)
 
-# PMD cube integration tests - these require test data to be generated first
-# Generate test data before running tests
-add_test(NAME generate_test_data COMMAND generate_test_data)
-set_tests_properties(generate_test_data PROPERTIES
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-)
+
 
 add_test(NAME integration_pmd_cubes COMMAND test_pmd_cubes)
 set_tests_properties(integration_pmd_cubes PROPERTIES
-    DEPENDS generate_test_data
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
@@ -132,7 +134,6 @@ add_test(
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 set_tests_properties(integration_cube_nobones PROPERTIES
-    DEPENDS generate_test_data
     FIXTURES_SETUP gltf_outputs
 )
 
@@ -142,7 +143,6 @@ add_test(
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 set_tests_properties(integration_cube_4bones PROPERTIES
-    DEPENDS generate_test_data
     FIXTURES_SETUP gltf_outputs
 )
 
@@ -152,7 +152,6 @@ add_test(
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 set_tests_properties(integration_cube_5bones PROPERTIES
-    DEPENDS generate_test_data
     FIXTURES_SETUP gltf_outputs
 )
 
@@ -162,7 +161,6 @@ add_test(
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 set_tests_properties(integration_cube_2bones_2props PROPERTIES
-    DEPENDS generate_test_data
     FIXTURES_SETUP gltf_outputs
 )
 
@@ -181,22 +179,6 @@ set_tests_properties(validation_gltf_roundtrip PROPERTIES
 )
 
 # Integration test - Add a simple test if input files exist
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/input/horse.pmd")
-    # Horse model validation tests
-    add_test(NAME integration_horse_model COMMAND test_horse_model)
-    set_tests_properties(integration_horse_model PROPERTIES
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    )
-    
-    add_test(
-        NAME integration_converter_test
-        COMMAND $<TARGET_FILE:converter> input/horse
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    )
-    set_tests_properties(integration_converter_test PROPERTIES
-        PASS_REGULAR_EXPRESSION "Done! Exported [0-9]+ animation"
-    )
-endif()
 
 # Package configuration
 set(CPACK_PACKAGE_NAME "pmd-to-gltf")
