@@ -223,6 +223,17 @@ void export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims,
                 new_norm.x /= total_weight;
                 new_norm.y /= total_weight;
                 new_norm.z /= total_weight;
+                // Normalize the blended normal
+                float norm_len = sqrtf(new_norm.x*new_norm.x + new_norm.y*new_norm.y + new_norm.z*new_norm.z);
+                if (norm_len > 1e-6f) {
+                    new_norm.x /= norm_len;
+                    new_norm.y /= norm_len;
+                    new_norm.z /= norm_len;
+                }
+                // Flip normals to fix inside-out shading
+                new_norm.x = -new_norm.x;
+                new_norm.y = -new_norm.y;
+                new_norm.z = -new_norm.z;
                 pos = new_pos;
                 norm = new_norm;
             }
