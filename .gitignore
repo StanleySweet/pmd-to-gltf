@@ -91,3 +91,9 @@ tests/output/*.bin
 # Core dumps
 core
 vgcore.*
+
+
+input/*.psa
+input/*.pmd
+input/*.dds
+input/*.json

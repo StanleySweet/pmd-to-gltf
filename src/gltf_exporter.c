@@ -146,6 +146,8 @@ int export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, 
             }
             fprintf(stderr, "\n");
             return 0;
+        } else {
+            fprintf(stderr, "Applying rest pose animation: '%s'\n", rest_pose_anim);
         }
     }
 

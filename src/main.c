@@ -18,7 +18,6 @@ char* get_first_skeleton_id(const char *filename);
 
 // Extract animation name from PSA filename
 // Pattern: basename_animname.psa -> "animname"
-// For horse_idle_a.psa with basename "horse" -> "idle_a"
 static char* extract_anim_name(const char *psa_file, const char *basename) {
     // Find last path separator
     const char *filename = strrchr(psa_file, '/');
@@ -82,7 +81,7 @@ int main(int argc, char *argv[]) {
     char skeleton_json_file[512];
     char output_file[512];
     snprintf(pmd_file, sizeof(pmd_file), "%s.pmd", base_name);
-    snprintf(skeleton_json_file, sizeof(skeleton_json_file), "%s_config.json", base_name);
+    snprintf(skeleton_json_file, sizeof(skeleton_json_file), "%s.json", base_name);
 
     const char *output_basename = strrchr(base_name, '/');
     if (!output_basename) output_basename = strrchr(base_name, '\\');
