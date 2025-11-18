@@ -51,10 +51,14 @@ i686-w64-mingw32-gcc -o converter.exe main.c pmd_parser.c psa_parser.c gltf_expo
 ## Usage
 
 ```bash
-./converter model.pmd animation.psa [output.gltf] [skeleton.xml] [skeleton_id]
+./converter <base_name> [--print-bones]
 ```
 
-The converter auto-detects `model.xml` skeleton file if not specified.
+- Loads: `<base_name>.pmd`, `<base_name>.xml`, `<base_name>_*.psa`
+- Outputs: `output/<filename>.gltf` (where filename is extracted from base_name)
+- The converter automatically detects skeleton ID from the XML file
+- Example: `./converter input/horse` (auto-detects skeleton ID from input/horse.xml, loads input/horse.pmd, input/horse_*.psa → outputs output/horse.gltf)
+- Use `--print-bones` to display bone hierarchy information
 
 ## CI/CD
 

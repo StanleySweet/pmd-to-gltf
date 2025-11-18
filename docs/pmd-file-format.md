@@ -14,11 +14,11 @@ All types are stored in little-endian format. Text is always ASCII.
 ```c
  PMD {
     char magic[4];  // == "PSMD"
-    u32 version;  // == 4
+    u32 version;  // 1, 2, 3, or 4
     u32 data_size;  // == filesize-12
 
     u32 numVertices;
-    u32 numTexCoords;  // number of UV pairs per vertex
+    u32 numTexCoords;  // number of UV pairs per vertex (only present in version 4+, defaults to 1 for older versions)
     Vertex vertices[numVertices];
 
     u32 numFaces;
@@ -27,6 +27,7 @@ All types are stored in little-endian format. Text is always ASCII.
     u32 numBones;
     BoneState restStates[numBones];
 
+    // Only present in version 2+
     u32 numPropPoints;
     PropPoint propPoints[numPropPoints];  // note: PropPoint has variable size (see below)
  }
@@ -80,9 +81,37 @@ All types are stored in little-endian format. Text is always ASCII.
  }
 ```
 
-Some meshes also use PMD version 1. The only difference between this and version 2 is that no prop points are specified (there is no `numPropPoints` and no `propPoints` array).
+## Version Differences
 
-Some use PMD version 2. These store vertex positions/normals already transformed by the inverse of `restStates`. That can only work correctly when `VertexBlend` has only a single non-zero weight, so PMD version 3 stores vertices in world space instead.
+**PMD Version 1:**
+- No prop points (no `numPropPoints` and no `propPoints` array)
+- Single UV pair per vertex (no `numTexCoords` field)
+
+**PMD Version 2:**
+- Adds prop points support
+- Vertices stored relative to bind-pose (transformed by inverse of `restStates`)
+- Single UV pair per vertex (no `numTexCoords` field)
+- Only works correctly with single bone influences per vertex
+
+**PMD Version 3:**
+- Vertices stored in world space (no bind-pose transformation)
+- Single UV pair per vertex (no `numTexCoords` field)
+- Supports multiple bone influences per vertex
+
+**PMD Version 4:**
+- All features of version 3
+- Adds `numTexCoords` field for multiple UV sets per vertex
+- Supports multiple texture coordinate pairs per vertex
+
+## Implementation Notes
+
+**Bone Count Limit:**
+According to the official PMDConvert.cpp, the maximum number of bones is 254 (not 255) because:
+- Bone index 0xFF (255) is reserved as "no bone" marker
+- Bone index equal to `jointCount` is reserved for bind-shape matrix special case
+
+**Coordinate System:**
+All PMD versions store coordinates in world space. The coordinate transformations mentioned in PMDConvert.cpp apply during PMD creation from COLLADA, not during PMD reading.
 
 The algorithm for calculating vertex data under a skeletal animation is:
 
@@ -97,5 +126,3 @@ The algorithm for calculating vertex data under a skeletal animation is:
      norm += blend.weights[i] * animatedPoseMatrix * inverseRestMatrix * (normal,0)
  norm = normalise(norm)
 ```
-
-PMD version 3 supported only one UV pair per vertex, so there was no `numTexCoords`.

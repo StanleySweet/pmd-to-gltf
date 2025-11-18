@@ -2,13 +2,37 @@
 
 Ce répertoire contient la suite de tests unitaires et d'intégration pour le convertisseur PMD vers glTF.
 
+## Documentation
+
+Pour une documentation complète sur la suite de tests, voir [docs/test-suite.md](../docs/test-suite.md) qui inclut:
+- Spécifications techniques des fichiers de test
+- Spécifications fonctionnelles de validation
+- Description détaillée des cas de test
+- Critères de validation
+
 ## Structure des tests
 
 - `test_framework.h` - Framework de test personnalisé avec macros d'assertion
 - `test_filesystem.c` - Tests pour les operations de système de fichiers
 - `test_animation.c` - Tests pour l'extraction des noms d'animation
 - `test_types.c` - Tests pour les structures de données (Vector3D, Quaternion, etc.)
+- `test_pmd_cubes.c` - Tests d'intégration pour les cubes de test PMD
+- `test_horse_model.c` - Tests d'intégration pour le modèle du cheval
+- `test_gltf_output.c` - Tests de validation de la sortie glTF
+- `test_gltf_roundtrip.c` - Tests de validation aller-retour (round-trip) PMD → glTF → validation
+- `generate_test_data.c` - Générateur de fichiers PMD/PSA de test
 - `run_tests.sh` - Script pour exécuter tous les tests manuellement
+
+### Fichiers de test générés
+
+Les fichiers suivants sont générés automatiquement par `generate_test_data`:
+- `data/cube_nobones.pmd` - Cube 2m×2m×2m sans squelette
+- `data/cube_4bones.pmd` - Cube avec 4 os aux coins
+- `data/cube_4bones_anim.psa` - Animation pour cube_4bones
+- `data/cube_5bones.pmd` - Cube avec 5 os (4 coins + 1 centre)
+- `data/cube_5bones_anim.psa` - Animation pour cube_5bones
+- `data/cube_5bones.xml` - Squelette hiérarchique pour cube_5bones
+- `data/cube_2bones_2props.pmd` - Cube avec 2 os et 2 points de prop (pour tester les prop points)
 
 ## Exécution des tests
 
@@ -43,9 +67,17 @@ ctest -R unit_filesystem --output-on-failure
 - **unit_filesystem** : Test des fonctions de recherche et énumération de fichiers
 - **unit_animation** : Test de l'extraction des noms d'animation à partir des chemins
 - **unit_types** : Test des structures de données et opérations de base
+- **integration_pmd_cubes** : Tests de chargement et validation des cubes PMD de test
+- **integration_horse_model** : Tests de validation du modèle du cheval (206 vertices, 33 bones, 8 prop points)
 
 ### Tests d'intégration  
-- **integration_converter_test** : Test complet de conversion PMD vers glTF
+- **integration_converter_test** : Test complet de conversion PMD vers glTF (horse)
+- **integration_cube_nobones** : Conversion cube sans os vers glTF
+- **integration_cube_4bones** : Conversion cube 4 os + animation vers glTF
+- **integration_cube_5bones** : Conversion cube 5 os hiérarchique + animation vers glTF
+- **integration_cube_2bones_2props** : Conversion cube 2 os + 2 prop points vers glTF (teste le format JSON des joints)
+- **validation_gltf_output** : Validation de la structure et du contenu des fichiers glTF générés
+- **validation_gltf_roundtrip** : Tests aller-retour (round-trip) - décodage base64, validation des positions de vertex, préservation des dimensions
 
 ## Framework de test
 
