@@ -6,25 +6,25 @@
 // Read helpers for little-endian data
 static uint32_t read_u32(FILE *f) {
     uint8_t buf[4];
-    fread(buf, 1, 4, f);
+    if (fread(buf, 1, 4, f) != 4) return 0;
     return buf[0] | (buf[1] << 8) | (buf[2] << 16) | (buf[3] << 24);
 }
 
 static uint16_t read_u16(FILE *f) {
     uint8_t buf[2];
-    fread(buf, 1, 2, f);
+    if (fread(buf, 1, 2, f) != 2) return 0;
     return buf[0] | (buf[1] << 8);
 }
 
 static uint8_t read_u8(FILE *f) {
     uint8_t val;
-    fread(&val, 1, 1, f);
+    if (fread(&val, 1, 1, f) != 1) return 0;
     return val;
 }
 
 static float read_float(FILE *f) {
     float val;
-    fread(&val, sizeof(float), 1, f);
+    if (fread(&val, sizeof(float), 1, f) != 1) return 0.0f;
     return val;
 }
 
@@ -57,7 +57,12 @@ PMDModel* load_pmd(const char *filename) {
 
     // Read header
     char magic[4];
-    fread(magic, 1, 4, f);
+    if (fread(magic, 1, 4, f) != 4) {
+        fprintf(stderr, "Failed to read PMD magic\n");
+        free(model);
+        fclose(f);
+        return NULL;
+    }
     if (memcmp(magic, "PSMD", 4) != 0) {
         fprintf(stderr, "Invalid PMD magic\n");
         free(model);
@@ -132,7 +137,12 @@ PMDModel* load_pmd(const char *filename) {
         for (uint32_t i = 0; i < model->numPropPoints; i++) {
             uint32_t nameLen = read_u32(f);
             model->propPoints[i].name = calloc(nameLen + 1, 1);
-            fread(model->propPoints[i].name, 1, nameLen, f);
+            if (fread(model->propPoints[i].name, 1, nameLen, f) != nameLen) {
+                fprintf(stderr, "Failed to read prop point name\n");
+                free_pmd(model);
+                fclose(f);
+                return NULL;
+            }
             model->propPoints[i].translation = read_vec3(f);
             model->propPoints[i].rotation = read_quat(f);
             model->propPoints[i].bone = read_u8(f);

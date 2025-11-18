@@ -2,18 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "portable_string.h"
 
 // Cross-platform safe string duplication
-static char* safe_strdup(const char *str) {
-    if (!str) return NULL;
-    size_t len = strlen(str);
-    char *copy = malloc(len + 1);
-    if (copy) {
-        memcpy(copy, str, len);
-        copy[len] = '\0';
-    }
-    return copy;
-}
+#include "portable_string.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -43,7 +35,7 @@ static void add_file_to_list(FileList *list, const char *filepath) {
         list->paths = realloc(list->paths, list->capacity * sizeof(char*));
     }
     
-    list->paths[list->count++] = safe_strdup(filepath);
+    list->paths[list->count++] = my_strdup(filepath);
 }
 
 FileList* find_files(const char *directory, const char *pattern) {

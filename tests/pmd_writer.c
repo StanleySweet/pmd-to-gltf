@@ -3,14 +3,7 @@
 #include <stdlib.h>
 
 // Write helpers for little-endian data
-#ifdef __cplusplus
-extern "C" {
-#endif
 #include "../src/skeleton.h"
-int export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name, const float *anim_speed_percent, const char *rest_pose_anim);
-#ifdef __cplusplus
-}
-#endif
 static void write_u32(FILE *f, uint32_t val) {
     uint8_t buf[4];
     buf[0] = val & 0xFF;

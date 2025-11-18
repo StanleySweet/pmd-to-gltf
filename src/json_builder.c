@@ -65,7 +65,7 @@ cJSON* json_create_buffer(size_t byte_length, const char *uri)
 {
     cJSON *buffer = cJSON_CreateObject();
 
-    cJSON_AddNumberToObject(buffer, "byteLength", byte_length);
+    cJSON_AddNumberToObject(buffer, "byteLength", (double)byte_length);
     cJSON_AddStringToObject(buffer, "uri", uri);
 
     return buffer;
@@ -76,7 +76,7 @@ cJSON* json_create_buffer_view(uint32_t buffer, size_t byte_length)
     cJSON *buffer_view = cJSON_CreateObject();
 
     cJSON_AddNumberToObject(buffer_view, "buffer", buffer);
-    cJSON_AddNumberToObject(buffer_view, "byteLength", byte_length);
+    cJSON_AddNumberToObject(buffer_view, "byteLength", (double)byte_length);
 
     return buffer_view;
 }
@@ -165,12 +165,12 @@ cJSON* json_create_animation(const char *anim_name, cJSON *samplers, cJSON *chan
 /* Utility functions */
 void json_add_float_array(cJSON *obj, const char *key, const float *values, size_t count)
 {
-    cJSON *array = cJSON_CreateFloatArray(values, count);
+    cJSON *array = cJSON_CreateFloatArray(values, (int)count);
     cJSON_AddItemToObject(obj, key, array);
 }
 
 void json_add_uint32_array(cJSON *obj, const char *key, const uint32_t *values, size_t count)
 {
-    cJSON *array = cJSON_CreateIntArray((int *)values, count);
+    cJSON *array = cJSON_CreateIntArray((int *)values, (int)count);
     cJSON_AddItemToObject(obj, key, array);
 }

@@ -6,6 +6,22 @@ project(pmd-to-gltf
     LANGUAGES C
 )
 
+# Détection des fonctions de chaîne portables (après activation du langage)
+include(CheckFunctionExists)
+check_function_exists(strncpy_s HAVE_STRNCPY_S)
+check_function_exists(strdup HAVE_STRDUP)
+check_function_exists(_strdup HAVE__STRDUP)
+
+if(HAVE_STRNCPY_S)
+    add_compile_definitions(HAVE_STRNCPY_S)
+endif()
+if(HAVE__STRDUP)
+    add_compile_definitions(HAVE__STRDUP)
+endif()
+if(HAVE_STRDUP)
+    add_compile_definitions(HAVE_STRDUP)
+endif()
+
 # Set C standard
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)

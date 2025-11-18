@@ -1,3 +1,6 @@
+#ifdef _WIN32
+#include "portable_string.h"
+#endif
 #include "skeleton.h"
 #include "filesystem.h"
 #include "cJSON.h"
@@ -14,6 +17,7 @@
 #include "skeleton.h"
 #include "json_builder.h"
 #include "cJSON.h"
+#include "gltf_exporter.h"
 
 // Helper: build matrix from BoneState
 void make_matrix(const BoneState *bs, float *out) {
@@ -437,7 +441,7 @@ int export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, 
     const char *armature_name = "Armature";
     // Lire le nom/titre du squelette depuis le JSON de config
     if (skel && skel->title[0] != '\0') {
-        strncpy(armature_name_buf, skel->title, sizeof(armature_name_buf)-1);
+        my_strncpy(armature_name_buf, skel->title, sizeof(armature_name_buf)-1);
         armature_name_buf[sizeof(armature_name_buf)-1] = '\0';
         armature_name = armature_name_buf;
     }

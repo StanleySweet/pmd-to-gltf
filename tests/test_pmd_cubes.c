@@ -4,13 +4,6 @@
 #include <math.h>
 #include <stdio.h>
 
-// Forward declarations of functions from pmd_parser.c
-extern PMDModel* load_pmd(const char *filename);
-extern void free_pmd(PMDModel *model);
-
-// Forward declarations from psa_parser.c
-extern PSAAnimation* load_psa(const char *filename);
-extern void free_psa(PSAAnimation *anim);
 
 // Helper to compare floats with tolerance
 static int float_equal(float a, float b, float tolerance) {

@@ -5,14 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include "cJSON.h"
+#include "gltf_exporter.h"
 
 // Function declarations from other modules
-PMDModel* load_pmd(const char *filename);
-void free_pmd(PMDModel *model);
-PSAAnimation* load_psa(const char *filename);
-void free_psa(PSAAnimation *anim);
-int export_gltf(const char *output_file, PMDModel *model, PSAAnimation **anims, uint32_t anim_count, SkeletonDef *skel, const char *mesh_name, const float *anim_speed_percent, const char *rest_pose_anim);
-char* get_first_skeleton_id(const char *filename);
 
 
 

@@ -14,6 +14,9 @@ typedef struct {
 // Pattern examples: "*.psa", "horse_*.psa"
 FileList* find_files(const char *directory, const char *pattern);
 
+
+#include "portable_string.h"
+
 // Free a FileList structure
 void free_file_list(FileList *list);
 

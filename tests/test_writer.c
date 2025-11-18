@@ -1,3 +1,4 @@
+#include "portable_string.h"
 #include <assert.h>
 #define ASSERT(x) do { if (!(x)) { fprintf(stderr, "Assertion failed: %s (line %d)\n", #x, __LINE__); return 1; } } while(0)
 #include "pmd_writer.h"
@@ -85,7 +86,7 @@ int main(void) {
 
     printf("[TEST] Allocation PSAAnimation\n");
     PSAAnimation anim = {0};
-    anim.name = strdup("test_anim");
+    anim.name = my_strdup("test_anim");
     ASSERT(anim.name);
     anim.frameLength = 0.03333f;
     anim.numBones = 1;

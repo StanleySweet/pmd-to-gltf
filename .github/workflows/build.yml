@@ -20,8 +20,10 @@ jobs:
         build_type: [Release, Debug]
     
     steps:
-      - name: Checkout code
+      - name: Checkout code (with submodules)
         uses: actions/checkout@v4
+        with:
+          submodules: true
       
       - name: Install dependencies
         run: |
@@ -40,11 +42,6 @@ jobs:
           cd build
           ctest --output-on-failure
           
-      - name: Test Converter
-        run: |
-          ./build/converter input/horse output/test_linux_${{ matrix.compiler }}_${{ matrix.build_type }}.gltf Horse
-          ls -lh output/test_linux_${{ matrix.compiler }}_${{ matrix.build_type }}.gltf
-      
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -59,8 +56,10 @@ jobs:
         build_type: [Release, Debug]
     
     steps:
-      - name: Checkout code
+      - name: Checkout code (with submodules)
         uses: actions/checkout@v4
+        with:
+          submodules: true
       
       - name: Configure and Build
         run: |
@@ -72,11 +71,6 @@ jobs:
           cd build
           ctest --output-on-failure
           
-      - name: Test Converter
-        run: |
-          ./build/converter input/horse output/test_macos_${{ matrix.build_type }}.gltf Horse
-          ls -lh output/test_macos_${{ matrix.build_type }}.gltf
-      
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -91,8 +85,10 @@ jobs:
         build_type: [Release, Debug]
     
     steps:
-      - name: Checkout code
+      - name: Checkout code (with submodules)
         uses: actions/checkout@v4
+        with:
+          submodules: true
       
       - name: Configure and Build
         run: |
@@ -104,11 +100,6 @@ jobs:
           cd build
           ctest --output-on-failure -C ${{ matrix.build_type }}
           
-      - name: Test Converter
-        run: |
-          .\build\${{ matrix.build_type }}\converter.exe input\horse output\test_windows_${{ matrix.build_type }}.gltf Horse
-          dir output\test_windows_${{ matrix.build_type }}.gltf
-      
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -122,8 +113,10 @@ jobs:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     
     steps:
-      - name: Checkout code
+      - name: Checkout code (with submodules)
         uses: actions/checkout@v4
+        with:
+          submodules: true
       
       - name: Install dependencies
         run: |

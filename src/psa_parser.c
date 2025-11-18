@@ -6,13 +6,13 @@
 // Reuse read helpers (these should be in a shared header in production)
 static uint32_t read_u32(FILE *f) {
     uint8_t buf[4];
-    fread(buf, 1, 4, f);
+    if (fread(buf, 1, 4, f) != 4) return 0;
     return buf[0] | (buf[1] << 8) | (buf[2] << 16) | (buf[3] << 24);
 }
 
 static float read_float(FILE *f) {
     float val;
-    fread(&val, sizeof(float), 1, f);
+    if (fread(&val, sizeof(float), 1, f) != 1) return 0.0f;
     return val;
 }
 
@@ -46,7 +46,12 @@ PSAAnimation* load_psa(const char *filename) {
 
     // Read header
     char magic[4];
-    fread(magic, 1, 4, f);
+    if (fread(magic, 1, 4, f) != 4) {
+        fprintf(stderr, "Failed to read PSA magic\n");
+        free(anim);
+        fclose(f);
+        return NULL;
+    }
     if (memcmp(magic, "PSSA", 4) != 0) {
         fprintf(stderr, "Invalid PSA magic\n");
         free(anim);
@@ -66,7 +71,12 @@ PSAAnimation* load_psa(const char *filename) {
     // Read name
     uint32_t nameLen = read_u32(f);
     anim->name = calloc(nameLen + 1, 1);
-    fread(anim->name, 1, nameLen, f);
+    if (fread(anim->name, 1, nameLen, f) != nameLen) {
+        fprintf(stderr, "Failed to read animation name\n");
+        free_psa(anim);
+        fclose(f);
+        return NULL;
+    }
 
     // Read frame length (unused but still in file)
     anim->frameLength = read_float(f);

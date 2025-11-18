@@ -1,10 +1,15 @@
 #include "test_framework.h"
+#include "portable_string.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include "../vendor/cJSON/cJSON.h"
+#ifdef _WIN32
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 #include "pmd_writer.h"
 #include "pmd_psa_types.h"
 
@@ -359,7 +364,7 @@ static void create_cube_5bones(const char *filename) {
 
 static PSAAnimation* create_simple_4bones_anim(void) {
     PSAAnimation *anim = calloc(1, sizeof(PSAAnimation));
-    anim->name = strdup("test_anim");
+    anim->name = my_strdup("test_anim");
     anim->frameLength = 0.03333f;  // 30 fps
     anim->numBones = 4;
     anim->numFrames = 10;

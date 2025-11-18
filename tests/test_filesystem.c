@@ -21,7 +21,11 @@ static int create_test_file(const char *path, const char *content) {
 
 // Helper function to remove test file
 static void remove_test_file(const char *path) {
+    #ifdef _WIN32
+    _unlink(path);
+    #else
     unlink(path);
+    #endif
 }
 
 static int test_create_and_free_file_list(void) {

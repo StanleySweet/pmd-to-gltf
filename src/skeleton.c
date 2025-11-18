@@ -1,4 +1,4 @@
-// Tous les includes en haut
+#include "portable_string.h"
 #include "skeleton.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,7 +16,7 @@ SkeletonDef* load_skeleton_json(const char *filename) {
     long size = ftell(f);
     fseek(f, 0, SEEK_SET);
     char *content = malloc((size_t)size + 1);
-    fread(content, 1, (size_t)size, f);
+    if (fread(content, 1, (size_t)size, f) != (size_t)size) { fclose(f); return NULL; }
     content[size] = '\0';
     fclose(f);
 
@@ -35,13 +35,13 @@ SkeletonDef* load_skeleton_json(const char *filename) {
     }
 
     SkeletonDef *skel = calloc(1, sizeof(SkeletonDef));
-    strncpy(skel->skeleton_file, filename, sizeof(skel->skeleton_file)-1);
+    my_strncpy(skel->skeleton_file, filename, sizeof(skel->skeleton_file)-1);
     skel->skeleton_file[sizeof(skel->skeleton_file)-1] = '\0';
     skel->skeleton_id[0] = '\0';
 
     cJSON *title = cJSON_GetObjectItem(skel_obj, "title");
     if (title && cJSON_IsString(title)) {
-        strncpy(skel->title, title->valuestring, sizeof(skel->title)-1);
+        my_strncpy(skel->title, title->valuestring, sizeof(skel->title)-1);
         skel->title[sizeof(skel->title)-1] = '\0';
     } else {
         skel->title[0] = '\0';
@@ -56,7 +56,7 @@ SkeletonDef* load_skeleton_json(const char *filename) {
             cJSON *name = cJSON_GetObjectItem(bone, "name");
             cJSON *parent = cJSON_GetObjectItem(bone, "parent_index");
             if (name && cJSON_IsString(name)) {
-                strncpy(skel->bones[i].name, name->valuestring, sizeof(skel->bones[i].name)-1);
+                my_strncpy(skel->bones[i].name, name->valuestring, sizeof(skel->bones[i].name)-1);
                 skel->bones[i].name[sizeof(skel->bones[i].name)-1] = '\0';
             } else {
                 skel->bones[i].name[0] = '\0';
@@ -177,7 +177,7 @@ SkeletonDef* load_skeleton_xml(const char *filename, const char *skeleton_id) {
     fseek(f, 0, SEEK_SET);
 
     char *content = malloc((size_t)size + 1);
-    fread(content, 1, (size_t)size, f);
+    if (fread(content, 1, (size_t)size, f) != (size_t)size) { fclose(f); return NULL; }
     content[size] = '\0';
     fclose(f);
 
@@ -198,9 +198,9 @@ SkeletonDef* load_skeleton_xml(const char *filename, const char *skeleton_id) {
     }
 
     SkeletonDef *skel = calloc(1, sizeof(SkeletonDef));
-    strncpy(skel->skeleton_file, filename, sizeof(skel->skeleton_file)-1);
+    my_strncpy(skel->skeleton_file, filename, sizeof(skel->skeleton_file)-1);
     skel->skeleton_file[sizeof(skel->skeleton_file)-1] = '\0';
-    strncpy(skel->skeleton_id, skeleton_id, sizeof(skel->skeleton_id)-1);
+    my_strncpy(skel->skeleton_id, skeleton_id, sizeof(skel->skeleton_id)-1);
     skel->skeleton_id[sizeof(skel->skeleton_id)-1] = '\0';
     skel->title[0] = '\0'; // Initialisation du champ title
     const char *p = skel_start;
@@ -224,7 +224,7 @@ char* get_first_skeleton_id(const char *filename) {
     fseek(f, 0, SEEK_SET);
 
     char *content = malloc((size_t)size + 1);
-    fread(content, 1, (size_t)size, f);
+    if (fread(content, 1, (size_t)size, f) != (size_t)size) { fclose(f); return NULL; }
     content[size] = '\0';
     fclose(f);
 
